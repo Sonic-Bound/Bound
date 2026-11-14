@@ -52,6 +52,20 @@ struct PeerConfig {
     // announcing headers and never sending the blocks.
     std::int64_t max_tip_age = 24 * 60 * 60;
     std::int64_t sync_patience = 120;
+    // Home nodes (after milestone 8). A node that takes connections tells its outbound peers where
+    // to reach it, as Core's AdvertiseLocal does: at an `external` address (--externalip; port 0
+    // means listen_port) if it has one, otherwise where most of them say they see it. Once after
+    // each handshake, then on average once per self_announce_interval, so the address stays fresh
+    // in everyone's address book and newcomers keep finding it.
+    std::vector<NetAddress> external;
+    std::int64_t self_announce_interval = 24 * 60 * 60;
+};
+
+// An address this node may be reachable at from outside (getnetworkinfo's localaddresses).
+struct LocalAddress {
+    NetAddress addr;
+    bool manual = false;    // given with --externalip
+    std::size_t peers = 0;  // outbound peers that see us at it
 };
 
 struct PeerInfo {
@@ -122,6 +136,10 @@ public:
     bool initial_sync(std::int64_t now) const;
     // The transport should stop reading from this peer for now (receive_backlog_limit).
     bool read_paused(PeerId id) const;
+    // Where we might be reachable: the --externalip addresses, then each public address outbound
+    // peers report seeing us at (their version's addr_you, with our listening port), the most
+    // reported first. Empty when we take no connections. The first one is what we advertise.
+    std::vector<LocalAddress> local_addresses() const;
 
     // ChainListener: remembers confirmed transactions, so announcements of them aren't fetched.
     void block_connected(const Block& block, const BlockIndex& node) override;
@@ -152,6 +170,7 @@ private:
         const BlockIndex* best_known = nullptr;    // the most-work block we know they have
         int unconnecting_headers = 0;
         bool answered_getaddr = false;
+        std::int64_t next_self_announce = 0;  // outbound: when to tell it our address again (0: once ready)
         // Milestone 7: transactions, all by wtxid.
         std::unordered_set<uint256> known_txs;       // they have it, or we told them about it
         std::vector<uint256> tx_announce;            // to put in our next inv to them
@@ -193,6 +212,7 @@ private:
     bool on_tx(PeerId id, Peer& peer, const Message& m, std::int64_t now);
 
     void relay_address(const AddrEntry& entry, PeerId source);
+    void announce_self(std::int64_t now);
     void after_changes(std::int64_t now);
     void announce_tip();
     void request_blocks(std::int64_t now);
@@ -225,6 +245,7 @@ private:
     Logger log_;
     std::map<PeerId, Peer> peers_;
     std::set<NetAddress> self_addresses_;
+    std::optional<NetAddress> advertised_;  // the address announce_self last sent, for the log
 
     std::map<uint256, PeerId> requested_;                  // every block in flight, and from whom
     std::map<const BlockIndex*, DownloadPath> paths_;      // by the header each leads to; see request_blocks

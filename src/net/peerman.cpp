@@ -28,6 +28,7 @@ constexpr std::int64_t kOrphanExpiry = 20 * 60;
 constexpr std::size_t kMaxRecent = 50000;        // recent_rejects_ and recent_confirmed_
 constexpr double kAddrPerSecond = 0.1;           // addresses taken from one peer, beyond a getaddr reply
 constexpr int kMaxUnrequestedAhead = 288;        // an unrequested block this far above our tip isn't kept (Core's)
+constexpr std::int64_t kAddrRefresh = 12 * 60 * 60;  // a known address seen this much later is news again
 
 // The decoded payload, or nullopt if it's malformed.
 template <typename F>
@@ -224,8 +225,60 @@ std::vector<PeerId> PeerManager::tick(std::int64_t now) {
         for (const uint256& wtxid : late) forget_tx_request(peer, wtxid);
     }
     std::erase_if(orphans_, [&](const auto& entry) { return entry.second.expires < now; });
+    announce_self(now);
     after_changes(now);
     return drop;
+}
+
+std::vector<LocalAddress> PeerManager::local_addresses() const {
+    std::vector<LocalAddress> list;
+    if (config_.listen_port == 0) return list;
+    const auto entry_for = [&](const NetAddress& addr) {
+        return std::find_if(list.begin(), list.end(), [&](const LocalAddress& l) { return l.addr == addr; });
+    };
+    for (NetAddress addr : config_.external) {
+        if (addr.port == 0) addr.port = config_.listen_port;
+        if (!addr.is_unspecified() && entry_for(addr) == list.end()) list.push_back({addr, true, 0});
+    }
+    // Only outbound peers count: we picked them, while anyone can connect in and say anything.
+    std::map<NetAddress, std::size_t> reports;
+    for (const auto& [id, peer] : peers_) {
+        if (peer.inbound || !peer.ready || !peer.version.addr_you.is_routable()) continue;
+        NetAddress addr = peer.version.addr_you;
+        addr.port = config_.listen_port;  // they saw the port we dialled from
+        ++reports[addr];
+    }
+    const std::size_t manual = list.size();
+    for (const auto& [addr, count] : reports) {
+        if (const auto found = entry_for(addr); found != list.end()) {
+            found->peers = count;
+        } else {
+            list.push_back({addr, false, count});
+        }
+    }
+    std::stable_sort(list.begin() + static_cast<std::ptrdiff_t>(manual), list.end(),
+                     [](const LocalAddress& a, const LocalAddress& b) { return a.peers > b.peers; });
+    return list;
+}
+
+// Our address to each outbound peer that's due for it: right after the handshake, then about once
+// a day (exponentially distributed, as in Core). It passes the news on, so the whole network keeps
+// hearing that we're up. Not while we're still catching up: nobody needs a node that far behind.
+void PeerManager::announce_self(std::int64_t now) {
+    if (initial_sync(now)) return;
+    const std::vector<LocalAddress> local = local_addresses();
+    if (local.empty()) return;
+    if (advertised_ != local.front().addr) {
+        advertised_ = local.front().addr;
+        if (log_) log_(std::format("advertising our address {}", advertised_->to_string()));
+    }
+    const std::array<AddrEntry, 1> one{AddrEntry{static_cast<std::uint32_t>(now), kNodeNetwork, local.front().addr}};
+    std::exponential_distribution<double> wait(1.0 / static_cast<double>(std::max<std::int64_t>(1, config_.self_announce_interval)));
+    for (auto& [id, peer] : peers_) {
+        if (peer.inbound || !peer.ready || peer.disconnect || now < peer.next_self_announce) continue;
+        send(peer, command::kAddr, encode_addresses(one));
+        peer.next_self_announce = now + 1 + static_cast<std::int64_t>(wait(rng_));
+    }
 }
 
 BlockAcceptResult PeerManager::submit_block(const Block& block, std::int64_t now) {
@@ -576,12 +629,21 @@ bool PeerManager::on_addr(PeerId id, Peer& peer, const Message& m, std::int64_t 
     // asked for with getaddr. The rest are dropped unread, so no peer can flood the address book.
     peer.addr_tokens = std::min<double>(kMaxAddresses, peer.addr_tokens + kAddrPerSecond * static_cast<double>(std::max<std::int64_t>(0, now - peer.addr_refilled)));
     peer.addr_refilled = now;
+    const std::vector<LocalAddress> local = local_addresses();
     for (AddrEntry entry : *entries) {
         if (peer.addr_tokens < 1) break;
         peer.addr_tokens -= 1;
         if (entry.time > now + kAddrFresh) entry.time = static_cast<std::uint32_t>(now - 5 * 24 * 60 * 60);  // from the future: distrust
         if (self_addresses_.contains(entry.addr)) continue;
-        if (addrman_.add(entry.addr, entry.time) && news && entry.time + kAddrFresh >= now) relay_address(entry, id);
+        if (std::any_of(local.begin(), local.end(), [&](const LocalAddress& l) { return l.addr == entry.addr; })) continue;  // ours, coming back
+        // An address we know is news again once it's been vouched for half a day later than we
+        // last heard: that's how a node's daily announcement travels past its own peers. Only
+        // news is passed on, so addresses don't circle.
+        const AddrInfo* known = addrman_.find(entry.addr);
+        const std::optional<std::int64_t> seen_before = known != nullptr ? std::optional(known->last_seen) : std::nullopt;
+        const bool added = addrman_.add(entry.addr, entry.time);
+        const bool refreshed = seen_before && std::int64_t{entry.time} >= *seen_before + kAddrRefresh;
+        if ((added || refreshed) && news && entry.time + kAddrFresh >= now) relay_address(entry, id);
     }
     return true;
 }

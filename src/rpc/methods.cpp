@@ -536,15 +536,29 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
               const double seconds = std::max(1.0, static_cast<double>(tip.header.time) - static_cast<double>(first.header.time));
               return (tip.chain_work - first.chain_work).to_double() / seconds;
           });
-    t.add("getnetworkinfo", "", "This node's version and connections.", 0, 0, [&node](const RpcParams&) -> json {
-        return {
-            {"subversion", node.user_agent},
-            {"protocolversion", kProtocolVersion},
-            {"connections", node.peers.peers().size()},
-            {"port", node.p2p_port},
-            {"headers_presyncs", node.peers.headers_syncs()},
-        };
-    });
+    t.add("getnetworkinfo", "",
+          "This node's version and connections, and the addresses it may be reachable at from outside "
+          "(localaddresses: from --externalip, or where its outbound peers see it; the first is the one it "
+          "advertises). connections_in above 0 from public addresses means others can reach it.",
+          0, 0, [&node](const RpcParams&) -> json {
+              const std::vector<PeerInfo> peers = node.peers.peers();
+              const auto in = static_cast<std::size_t>(std::count_if(peers.begin(), peers.end(), [](const PeerInfo& i) { return i.inbound; }));
+              json local = json::array();
+              for (const LocalAddress& l : node.peers.local_addresses()) {
+                  local.push_back({{"address", l.addr.ip_string()}, {"port", l.addr.port},
+                                   {"source", l.manual ? "externalip" : "peers"}, {"peers", l.peers}});
+              }
+              return {
+                  {"subversion", node.user_agent},
+                  {"protocolversion", kProtocolVersion},
+                  {"connections", peers.size()},
+                  {"connections_in", in},
+                  {"connections_out", peers.size() - in},
+                  {"port", node.p2p_port},
+                  {"localaddresses", local},
+                  {"headers_presyncs", node.peers.headers_syncs()},
+              };
+          });
     t.add("getconnectioncount", "", "How many peers are connected.", 0, 0, [&node](const RpcParams&) -> json { return node.peers.peers().size(); });
     t.add("getpeerinfo", "", "Every connected peer.", 0, 0, [&node](const RpcParams&) -> json {
         json list = json::array();

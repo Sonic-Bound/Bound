@@ -652,6 +652,145 @@ TEST_F(P2PTest, AReplayedNonceBlacklistsOnlyTheReplayer) {
     EXPECT_TRUE(normal.handshake());  // a nonce that was never ours is just a peer's
 }
 
+// Home nodes: a node tells the peers it dialled where to reach it, as Core's AdvertiseLocal does.
+
+namespace {
+
+// Answers the node's version on a connection it made (or took), saying where we see it.
+bool handshake_seeing(RawPeer& raw, const NetAddress& seen_as, std::uint64_t nonce) {
+    VersionMsg v;
+    v.nonce = nonce;
+    v.user_agent = "/raw/";
+    v.addr_you = seen_as;
+    return raw.send(command::kVersion, encode_version(v)) && raw.send(command::kVerack);
+}
+
+std::vector<AddrEntry> addresses_in(const std::vector<Message>& messages) {
+    std::vector<AddrEntry> all;
+    for (const Message& m : messages) {
+        if (m.command != command::kAddr) continue;
+        const std::vector<AddrEntry> entries = decode_addresses(m.payload);
+        all.insert(all.end(), entries.begin(), entries.end());
+    }
+    return all;
+}
+
+}  // namespace
+
+TEST_F(P2PTest, AdvertisesWhereItsPeersSeeIt) {
+    TestNode node(params, 1);  // listens on port 18444
+    RawPeer out(node, NetAddress::ipv4(8, 8, 4, 4, 18444), RawPeer::Kind::Outbound, 1001);
+    ASSERT_TRUE(handshake_seeing(out, NetAddress::ipv4(1, 2, 3, 4, 51000), 777));  // its ephemeral port
+    out.received();
+    node.peers.tick(kTestNow);
+    const std::vector<AddrEntry> told = addresses_in(out.received());
+    ASSERT_EQ(told.size(), 1u);
+    EXPECT_EQ(told[0].addr, NetAddress::ipv4(1, 2, 3, 4, 18444));  // with the port it listens on
+    EXPECT_EQ(told[0].time, static_cast<std::uint32_t>(kTestNow));
+
+    node.peers.tick(kTestNow + 60);
+    EXPECT_TRUE(addresses_in(out.received()).empty());  // not again a minute later
+    node.peers.tick(kTestNow + 10 * 24 * 60 * 60);
+    EXPECT_EQ(addresses_in(out.received()).size(), 1u);  // but again within days, to stay fresh
+
+    // Our own address, passed back to us, isn't something to dial.
+    const std::vector<AddrEntry> echo{{static_cast<std::uint32_t>(kTestNow), kNodeNetwork, NetAddress::ipv4(1, 2, 3, 4, 18444)}};
+    ASSERT_TRUE(out.send(command::kAddr, encode_addresses(echo)));
+    EXPECT_EQ(node.addrman.find(NetAddress::ipv4(1, 2, 3, 4, 18444)), nullptr);
+}
+
+// Only peers we dialled get a say (anyone can connect in and claim anything), and only a public
+// address is worth advertising.
+TEST_F(P2PTest, OnlyPublicAddressesFromOutboundPeersCount) {
+    TestNode node(params, 1);
+    RawPeer in(node, NetAddress::ipv4(8, 8, 8, 8, 40000), RawPeer::Kind::Inbound, 1001);
+    ASSERT_TRUE(handshake_seeing(in, NetAddress::ipv4(1, 2, 3, 4, 18444), 701));
+    RawPeer lan(node, NetAddress::ipv4(8, 8, 4, 4, 18444), RawPeer::Kind::Outbound, 1002);
+    ASSERT_TRUE(handshake_seeing(lan, NetAddress::ipv4(192, 168, 1, 6, 51000), 702));
+    in.received();
+    lan.received();
+    node.peers.tick(kTestNow);
+    EXPECT_TRUE(node.peers.local_addresses().empty());
+    EXPECT_TRUE(addresses_in(in.received()).empty());
+    EXPECT_TRUE(addresses_in(lan.received()).empty());
+}
+
+TEST_F(P2PTest, TheMostReportedAddressWins) {
+    TestNode node(params, 1);
+    RawPeer a(node, NetAddress::ipv4(8, 8, 4, 1, 18444), RawPeer::Kind::Outbound, 1001);
+    RawPeer b(node, NetAddress::ipv4(8, 8, 4, 2, 18444), RawPeer::Kind::Outbound, 1002);
+    RawPeer c(node, NetAddress::ipv4(8, 8, 4, 3, 18444), RawPeer::Kind::Outbound, 1003);
+    ASSERT_TRUE(handshake_seeing(a, NetAddress::ipv4(9, 9, 9, 9, 50001), 801));  // a liar, or a stale view
+    ASSERT_TRUE(handshake_seeing(b, NetAddress::ipv4(1, 2, 3, 4, 50002), 802));
+    ASSERT_TRUE(handshake_seeing(c, NetAddress::ipv4(1, 2, 3, 4, 50003), 803));
+    const std::vector<LocalAddress> local = node.peers.local_addresses();
+    ASSERT_EQ(local.size(), 2u);
+    EXPECT_EQ(local[0].addr, NetAddress::ipv4(1, 2, 3, 4, 18444));
+    EXPECT_EQ(local[0].peers, 2u);
+    EXPECT_FALSE(local[0].manual);
+    EXPECT_EQ(local[1].addr, NetAddress::ipv4(9, 9, 9, 9, 18444));
+    a.received();
+    node.peers.tick(kTestNow);
+    const std::vector<AddrEntry> told = addresses_in(a.received());
+    ASSERT_EQ(told.size(), 1u);
+    EXPECT_EQ(told[0].addr, NetAddress::ipv4(1, 2, 3, 4, 18444));
+}
+
+// --externalip: the address port forwarding points at, which peers can't know (here the router
+// forwards its port 28333 to ours).
+TEST_F(P2PTest, ExternalIpComesFirst) {
+    PeerConfig config;
+    config.external = {NetAddress::ipv4(5, 6, 7, 8, 28333), NetAddress::ipv4(1, 2, 3, 4, 0)};
+    TestNode node(params, 1, config);
+    RawPeer out(node, NetAddress::ipv4(8, 8, 4, 4, 18444), RawPeer::Kind::Outbound, 1001);
+    ASSERT_TRUE(handshake_seeing(out, NetAddress::ipv4(1, 2, 3, 4, 51000), 901));
+    const std::vector<LocalAddress> local = node.peers.local_addresses();
+    ASSERT_EQ(local.size(), 2u);
+    EXPECT_EQ(local[0].addr, NetAddress::ipv4(5, 6, 7, 8, 28333));
+    EXPECT_TRUE(local[0].manual);
+    EXPECT_EQ(local[1].addr, NetAddress::ipv4(1, 2, 3, 4, 18444));  // port 0: the one we listen on
+    EXPECT_TRUE(local[1].manual);
+    EXPECT_EQ(local[1].peers, 1u);
+    out.received();
+    node.peers.tick(kTestNow);
+    const std::vector<AddrEntry> told = addresses_in(out.received());
+    ASSERT_EQ(told.size(), 1u);
+    EXPECT_EQ(told[0].addr, NetAddress::ipv4(5, 6, 7, 8, 28333));
+}
+
+TEST_F(P2PTest, ANodeThatDoesntListenKeepsQuiet) {
+    PeerConfig config;
+    config.external = {NetAddress::ipv4(5, 6, 7, 8, 18444)};
+    TestNode node(params, 1, config);
+    node.peers.set_listen_port(0);  // --nolisten
+    RawPeer out(node, NetAddress::ipv4(8, 8, 4, 4, 18444), RawPeer::Kind::Outbound, 1001);
+    ASSERT_TRUE(handshake_seeing(out, NetAddress::ipv4(1, 2, 3, 4, 51000), 951));
+    out.received();
+    node.peers.tick(kTestNow);
+    EXPECT_TRUE(node.peers.local_addresses().empty());
+    EXPECT_TRUE(addresses_in(out.received()).empty());
+}
+
+// A known address is passed on again once someone vouches for it half a day later than we last
+// heard, so a node's daily announcement crosses the whole network; anything sooner stops here.
+TEST_F(P2PTest, FreshAnnouncementsOfKnownAddressesTravel) {
+    TestNode node(params, 1);
+    RawPeer watcher(node, NetAddress::ipv4(8, 8, 4, 4, 18444), RawPeer::Kind::Outbound, 1001);
+    ASSERT_TRUE(handshake_seeing(watcher, NetAddress::ipv4(10, 0, 0, 1, 51000), 961));
+    RawPeer source(node, NetAddress::ipv4(8, 8, 8, 8, 40000), RawPeer::Kind::Inbound, 1002);
+    ASSERT_TRUE(handshake_seeing(source, NetAddress::ipv4(10, 0, 0, 1, 18444), 962));
+    watcher.received();
+    const NetAddress home = NetAddress::ipv4(4, 4, 4, 4, 18333);
+    const auto announce = [&](std::int64_t now) {
+        const std::vector<AddrEntry> one{{static_cast<std::uint32_t>(now), kNodeNetwork, home}};
+        EXPECT_TRUE(source.send(command::kAddr, encode_addresses(one), now));
+        return addresses_in(watcher.received()).size();
+    };
+    EXPECT_EQ(announce(kTestNow), 1u);                // new: passed on
+    EXPECT_EQ(announce(kTestNow + 60 * 60), 0u);      // an hour later: old news
+    EXPECT_EQ(announce(kTestNow + 13 * 60 * 60), 1u);  // half a day on: news again
+}
+
 // Milestone 7: transaction relay.
 
 namespace {

@@ -3,7 +3,7 @@
 //   boundd [--datadir <dir>] node [--port <p>] [--rpcport <p>] [--nolisten | --local]
 //                                 [--connect <host[:port]>]... [--seednode <host[:port]>]...
 //                                 [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]
-//                                 [--mine <address>]
+//                                 [--externalip <ip[:port]>]... [--mine <address>]
 //                                                 run a node on the network until Ctrl+C or
 //                                                 `bound-cli stop`. JSON-RPC on 127.0.0.1
 //                                                 (bound-cli talks to it).
@@ -14,6 +14,8 @@
 //                      machine
 //       --allowprivate take and pass on private addresses (10.x, 192.168.x, ...): nodes on one LAN
 //       --index        keep the transaction and address indexes an explorer needs
+//       --externalip   the address others reach this node at (the port forwarded to it); without
+//                      it the node advertises where its outbound peers see it
 //   boundd [--datadir <dir>] mine <n> [address]   mine n blocks on the stored chain, offline
 //   boundd [--datadir <dir>] info                 height, tip, difficulty, work, supply
 //   boundd [--datadir <dir>] balance <address>
@@ -290,6 +292,7 @@ struct NodeOptions {
     bool allow_private = false;              // take and pass on private addresses (a LAN)
     bool index = false;                      // keep the transaction and address indexes
     std::optional<std::size_t> max_inbound;  // inbound connections to take
+    std::vector<std::string> external_ips;   // where others reach us (advertised to peers)
 };
 
 int cmd_node(const std::filesystem::path& datadir, const NodeOptions& options) {
@@ -308,12 +311,18 @@ int cmd_node(const std::filesystem::path& datadir, const NodeOptions& options) {
     const std::filesystem::path bans_file = datadir / "banlist.dat";
     BanMan banman = load_bans(bans_file);
 
+    const std::uint16_t listen_port = options.port != 0 ? options.port : p.default_port;
     PeerConfig peer_config;
+    for (const std::string& text : options.external_ips) {
+        const std::vector<NetAddress> found = resolve(text, listen_port);
+        if (found.empty()) throw std::invalid_argument("--externalip: can't resolve " + text);
+        peer_config.external.push_back(found.front());
+    }
     PeerManager peers(chain, mempool, addrman, banman, peer_config, seed ^ 0x9e3779b97f4a7c15ULL, log_line);
     ConnmanOptions net;
     net.listen = options.listen;
     net.loopback_only = options.local;
-    net.port = options.port != 0 ? options.port : p.default_port;
+    net.port = listen_port;
     net.default_port = p.default_port;
     net.connect = options.connect;
     if (options.use_seeds) net.seeds = p.seeds;
@@ -359,6 +368,7 @@ int cmd_node(const std::filesystem::path& datadir, const NodeOptions& options) {
     log_line(std::format("BOUND testnet node: height {}, {} known peer addresses, data in {}", chain.height(),
                          addrman.size(), datadir.string()));
     log_line(options.listen ? std::format("listening on port {}", connman.port()) : "not listening");
+    for (const NetAddress& addr : peer_config.external) log_line("external address " + addr.to_string());
     log_line(std::format("JSON-RPC on 127.0.0.1:{}", http.port()));
     log_line(net.seeds.empty() ? "no seeds: peers come from --connect and from the addresses already known"
                                : std::format("{} seeds to ask for peers if needed", net.seeds.size()));
@@ -503,7 +513,7 @@ int usage() {
     std::cerr << "usage: boundd [--datadir <dir>] node [--port <port>] [--rpcport <port>] [--nolisten | --local]\n"
                  "                                    [--connect <host[:port]>]... [--seednode <host[:port]>]...\n"
                  "                                    [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]\n"
-                 "                                    [--mine <address>]\n"
+                 "                                    [--externalip <ip[:port]>]... [--mine <address>]\n"
                  "       boundd [--datadir <dir>] mine <count> [address]\n"
                  "       boundd [--datadir <dir>] info\n"
                  "       boundd [--datadir <dir>] balance <address>\n"
@@ -555,6 +565,8 @@ int main(int argc, char** argv) {
                     options.allow_private = true;
                 } else if (args[i] == "--index") {
                     options.index = true;
+                } else if (args[i] == "--externalip" && has_value) {
+                    options.external_ips.emplace_back(args[++i]);
                 } else if (args[i] == "--maxinbound" && has_value) {
                     options.max_inbound = static_cast<std::size_t>(std::stoul(std::string(args[++i])));
                 } else {

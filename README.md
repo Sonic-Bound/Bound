@@ -39,6 +39,9 @@ All eight are done. Going public now takes machines rather than code: the launch
 - **Going public:** a node finds the network through seed names. `bound-seeder` is a DNS seeder
   for them, and `bound-explorer` is a block explorer for the web. Everything builds and runs on
   Linux as well as Windows, with systemd units for servers.
+- **Home nodes:** like Bitcoin, no server is required. A node that takes connections tells its
+  peers where to reach it, and the network passes that on; see
+  [docs/home-node.md](docs/home-node.md) for port forwarding and becoming a seed.
 
 ## Testnet parameters
 
@@ -78,6 +81,7 @@ manager*. From **Developer PowerShell for VS 2022**:
     build\msvc\Release\boundd.exe node --connect <host[:port]> --mine <address>
     build\msvc\Release\boundd.exe node --seednode <host[:port]> --index   # find peers through a seed;
                                                                           # keep the explorer's indexes
+    build\msvc\Release\boundd.exe node --externalip <ip[:port]>   # where others reach you, if peers can't tell
     build\msvc\Release\bound-explorer.exe        # a block explorer for that node: http://127.0.0.1:8080
     build\msvc\Release\bound-seeder.exe --host <seed name> --ns <this machine's name> --node <a node>
                                                  # a DNS seeder (see docs/milestone-8.md)
