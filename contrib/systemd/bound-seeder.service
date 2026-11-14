@@ -1,0 +1,56 @@
+# The BOUND DNS seeder as a system service. Before starting it:
+#  1. In the DNS of a domain you control (here example.org), delegate a name to this machine:
+#       seed.example.org.  NS  ns.example.org.
+#       ns.example.org.    A   203.0.113.10        <- this machine's public IPv4 address
+#  2. Edit the ExecStart line below: --host and --ns as above, --dnsaddr this machine's public
+#     address, and --node one or more nodes to start crawling from (by public address or name:
+#     the seeder ignores private and local addresses).
+#  3. Open UDP 53 in the firewall.
+#   sudo install -m 644 contrib/systemd/bound-seeder.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bound-seeder
+#   dig @203.0.113.10 seed.example.org A
+#
+# Binding --dnsaddr rather than every address keeps clear of systemd-resolved, which holds port
+# 53 on 127.0.0.53. Port 53 needs CAP_NET_BIND_SERVICE, granted here and nothing else.
+[Unit]
+Description=BOUND DNS seeder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bound
+Group=bound
+StateDirectory=bound
+ExecStart=/usr/local/bin/bound-seeder --host seed.example.org --ns ns.example.org --mbox hostmaster.example.org --dnsaddr 203.0.113.10 --node 203.0.113.10 --datadir /var/lib/bound/seeder
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=4096
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectProc=invisible
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

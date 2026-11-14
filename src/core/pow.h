@@ -1,0 +1,58 @@
+#pragma once
+
+#include "core/arith_uint256.h"
+#include "core/uint256.h"
+
+#include <cstdint>
+#include <functional>
+#include <optional>
+
+namespace bound {
+
+struct BlockIndex;
+struct ConsensusParams;
+
+// Decodes the compact "nBits" target encoding: exponent = bits >> 24, mantissa =
+// bits & 0x007fffff, value = mantissa * 256^(exponent - 3); 0x00800000 is a sign bit.
+// Same semantics as Bitcoin's arith_uint256::SetCompact, with its negative and overflow flags
+// folded into nullopt: returns nullopt if the value is negative (sign bit set and value
+// non-zero) or doesn't fit in 256 bits. Zero is a valid result.
+std::optional<uint256> target_from_compact(std::uint32_t bits);
+
+// Canonical compact encoding of target: keeps only its 3 most significant bytes (so it's
+// lossy) and never sets the sign bit. Same as arith_uint256::GetCompact(false).
+std::uint32_t compact_from_target(const uint256& target);
+
+// True iff bits decodes to a target t with 0 < t <= pow_limit, and hash <= t.
+bool check_proof_of_work(const uint256& hash, std::uint32_t bits, const uint256& pow_limit);
+
+// Milestone 4: work and difficulty adjustment.
+
+// The expected number of hashes it takes to meet bits' target: 2^256 / (target + 1), rounded
+// down (Bitcoin's GetBlockProof). A chain's work is this summed over its blocks, and the chain
+// with the most work wins. 0 if bits doesn't decode to a positive target.
+arith_uint256 block_proof(std::uint32_t bits);
+
+// Bitcoin's retarget formula (CalculateNextWorkRequired): bits' target times actual_timespan /
+// expected_timespan, with actual_timespan first clamped to [expected / 4, expected * 4] so one
+// retarget changes the difficulty at most 4x either way, and the result capped at pow_limit.
+// Preconditions: bits decodes to a positive target, and 0 < expected_timespan <= 2^30 (throws
+// std::invalid_argument otherwise), which keeps 4 * expected within 32 bits.
+std::uint32_t retarget(std::uint32_t bits, std::int64_t actual_timespan, std::int64_t expected_timespan,
+                       const uint256& pow_limit);
+
+// The bits a block on top of `parent` must have. The difficulty only changes at the start of each
+// period of params.retarget_interval blocks (heights that are multiples of it); other blocks copy
+// their parent's bits. A retarget compares how long the last period took, from the last block of
+// the period before it (genesis, for the first one) to `parent`, with target_spacing per block.
+std::uint32_t next_work_required(const BlockIndex& parent, const ConsensusParams& params);
+// The same rule from plain values, for headers that aren't in the block tree (headers presync).
+// time_at(h) gives the time of the parent's ancestor at height h; it's only called when a
+// retarget is due, for h = max(0, parent_height - retarget_interval).
+std::uint32_t next_work_required(int parent_height, std::uint32_t parent_bits, std::int64_t parent_time,
+                                 const std::function<std::int64_t(int)>& time_at, const ConsensusParams& params);
+
+// How many times harder bits' target is than params.pow_limit: 1.0 at the limit. For display.
+double difficulty(std::uint32_t bits, const ConsensusParams& params);
+
+}  // namespace bound
