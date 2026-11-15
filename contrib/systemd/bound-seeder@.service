@@ -1,6 +1,7 @@
-# The BOUND DNS seeder as a system service, one per network. contrib/deploy/bound-server sets it
-# up and prints the DNS records to add:
-#   sudo bound-server seeder testnet seed.example.org ns1.example.org
+# The BOUND DNS seeder as a system service; the instance is the network. Only one can run on a
+# machine, since it holds DNS port 53 (on launch day the seeder moves to mainnet).
+# contrib/deploy/bound-server sets it up, stops another network's, and prints the DNS records to add:
+#   sudo bound-server seeder mainnet seed.example.org ns1.example.org
 #
 # By hand:
 #  1. In the DNS of a domain you control (here example.org), delegate a name to this machine:

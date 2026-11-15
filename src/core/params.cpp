@@ -39,14 +39,16 @@ ConsensusParams make_testnet() {
     // Milestone 8. Seeds: the host names (or addresses) of the testnet's DNS seeders and always-on
     // nodes, e.g. "seed.example.org" (the default port is assumed; "host:port" names another).
     // A node asks them when it knows too few peers; after that, peers come from address gossip.
+    // Milestone 15: the DNS seeders (seed.bound.sarl, seed2.bound.sarl) serve mainnet from launch
+    // day, as a server's one DNS port can only answer for one network. Testnet's seeds are the
+    // always-on nodes' own static addresses: Google Cloud (us-west1) and Microsoft Azure (South India).
     p.seeds = {
-        "seed.bound.sarl",   // DNS seeder on the Azure server: answers with nodes that are up
-        "seed2.bound.sarl",  // DNS seeder on the Google Cloud server
-        "136.86.151.244",    // the always-on nodes themselves (static addresses), in case DNS fails:
-        "104.211.211.39",    // Google Cloud (us-west1) and Microsoft Azure (South India)
+        "136.86.151.244",
+        "104.211.211.39",
     };
-    // Raise this to the public chain's work once there is one (see docs/hardening.md).
-    p.minimum_chain_work = 0;
+    // The public testnet's work at height 7,000 (block 0000020640a9...18c9, 2026-11-15): a fresh
+    // node won't store headers for a chain with less (docs/hardening.md). Raise it as the chain grows.
+    p.minimum_chain_work = 0x1'b201'b200;
 
     // Genesis, mined by `boundd genesis`. It pays the all-zero key, which nobody can sign for
     // (a small-order point that libsodium rejects), and its output never enters the UTXO set.
@@ -69,10 +71,11 @@ ConsensusParams make_mainnet() {
     p.network_name = "mainnet";
     p.launched = false;  // the genesis below is provisional: launch day mines the real one
 
-    // The easiest difficulty, as testnet's: about 65,000 hashes a block. ASERT can fall this far if
-    // the hash rate collapses, so the chain never stalls. Where it starts is the genesis block's
-    // bits (equal for this provisional genesis); launch day sets those to fit the hash rate then.
-    p.pow_limit_bits = 0x1f00ffff;
+    // Milestone 15 (the project owner's choice): Bitcoin's exact difficulty 1, about 2^32 hashes a
+    // block, where the genesis starts and the easiest the chain can ever get, as on Bitcoin. One PC
+    // on every core (~4.5 million hashes a second) finds a block about every 16 minutes; ASERT makes
+    // it harder as miners join, and never easier than this.
+    p.pow_limit_bits = 0x1d00ffff;
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;
@@ -91,8 +94,16 @@ ConsensusParams make_mainnet() {
     p.message_start = {0xd6, 0xb3, 0xe8, 0xf7};  // high bits set, as testnet's (see there)
     p.default_port = 7333;
     p.default_rpc_port = 7332;
-    p.seeds = {};  // the launch's always-on nodes and DNS seeders
-    p.minimum_chain_work = 0;
+    // Milestone 15: the DNS seeders first (bound-server sets them up; docs/running-a-server.md),
+    // then the always-on nodes' static addresses, in case DNS fails: Google Cloud (us-west1) and
+    // Microsoft Azure (South India).
+    p.seeds = {
+        "seed.bound.sarl",
+        "seed2.bound.sarl",
+        "136.86.151.244",
+        "104.211.211.39",
+    };
+    p.minimum_chain_work = 0;  // no chain yet: each release after launch raises it
 
     p.genesis_coinbase = make_coinbase(0, 50 * kCoin, PublicKey{},
                                        bytes_of("BOUND mainnet: a provisional genesis, replaced on launch day"));
@@ -100,8 +111,8 @@ ConsensusParams make_mainnet() {
     p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
     p.genesis.time = 1794700800;  // 2026-11-15 00:00:00 UTC
     p.genesis.bits = p.pow_limit_bits;
-    p.genesis.nonce = 17410;
-    p.genesis_hash = uint256::from_hex("0000725c9029a8709917e390fa8e914a370e611f7216086116af27104c093ebd").value();
+    p.genesis.nonce = 1352898970;  // milestone 15: mined again at difficulty 1 (`boundd --mainnet genesis`)
+    p.genesis_hash = uint256::from_hex("00000000ddae42ede41a3c1ebe9d394e0c79e89f16bf7dde003b2340bc0a1a9e").value();
     return p;
 }
 

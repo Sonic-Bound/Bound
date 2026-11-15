@@ -11,6 +11,7 @@
 #include <fstream>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace bound;
@@ -148,7 +149,20 @@ TEST_F(PersistenceTest, RefusesAnotherNetworksChain) {
     other.genesis.merkle_root = genesis_block(other).compute_merkle_root();
     other.genesis = mine(other.genesis, other.pow_limit).value();
     other.genesis_hash = other.genesis.hash();
-    EXPECT_THROW({ const Chainstate chain(other, db, blocks); }, std::runtime_error);
+    // Milestone 15: the same network's name with another genesis is a chain from before launch.
+    try {
+        const Chainstate chain(other, db, blocks);
+        ADD_FAILURE() << "opened a chain with another genesis";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("another genesis block"), std::string::npos) << e.what();
+    }
+    other.network_name = "elsewhere";
+    try {
+        const Chainstate chain(other, db, blocks);
+        ADD_FAILURE() << "opened another network's chain";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("another network"), std::string::npos) << e.what();
+    }
 }
 
 namespace {

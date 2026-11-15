@@ -62,8 +62,9 @@ int main(int argc, char** argv) {
     if (!options) {
         QMessageBox::information(nullptr, QStringLiteral("BOUND wallet"),
                                  QStringLiteral("usage: bound-qt [--mainnet | --testnet | --regtest] [--datadir <dir>] [node options]\n\n"
-                                                "Testnet unless told otherwise. The node options are those of `boundd node`: "
-                                                "--connect, --seednode, --port, --rpcport, --index, --externalip, ..."));
+                                                "The %1 unless told otherwise. The node options are those of `boundd node`: "
+                                                "--connect, --seednode, --port, --rpcport, --index, --externalip, ...")
+                                     .arg(QString::fromStdString(std::string(bound::network_name(bound::kDefaultNetwork)))));
         return 2;
     }
 

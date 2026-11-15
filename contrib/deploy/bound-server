@@ -276,6 +276,14 @@ cmd_explorer() {
   local net=${1:-} domain=${2:-}
   check_network "$net"
   [[ "$domain" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ || "$domain" == localhost ]] || die "usage: bound-server explorer <network> <domain>, e.g. explorer.example.org"
+  # One name, one explorer. On launch day mainnet takes the explorer's name, so testnet's moves first.
+  local other
+  for other in mainnet testnet regtest; do
+    [[ "$other" == "$net" ]] && continue
+    if grep -qx "$domain {" "/etc/caddy/bound/explorer-$other.caddy" 2> /dev/null; then
+      die "$domain is $other's explorer now. Give that one another name first: sudo bound-server explorer $other $other-$domain"
+    fi
+  done
 
   # The explorer's pages need the node's indexes.
   if add_node_option "$net" --index; then
@@ -337,6 +345,15 @@ cmd_seeder() {
   if ! command -v dig > /dev/null; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsutils > /dev/null 2>&1 || true
   fi
+  # A machine's DNS port can answer for one network only: on launch day the seeder moves to mainnet.
+  local other
+  for other in mainnet testnet regtest; do
+    [[ "$other" == "$net" ]] && continue
+    if systemctl is-enabled --quiet bound-seeder@"$other" 2> /dev/null || systemctl is-active --quiet bound-seeder@"$other"; then
+      systemctl disable --now bound-seeder@"$other" > /dev/null 2>&1 || true
+      say "  stopped bound-seeder@$other: this machine's DNS port answers for $net now"
+    fi
+  done
   printf '# Options for bound-seeder@%s (bound-server writes this; see bound-seeder@.service).\nBOUND_SEEDER_OPTIONS="--host %s --ns %s --mbox %s --dnsaddr %s --node 127.0.0.1"\n' \
     "$net" "$host" "$ns" "$mbox" "$address" > "$etc/seeder-$net.conf"
   chmod 644 "$etc/seeder-$net.conf"

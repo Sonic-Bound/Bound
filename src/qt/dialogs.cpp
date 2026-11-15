@@ -394,11 +394,12 @@ void show_about(QWidget* parent) {
     box.setInformativeText(
         QStringLiteral("<p>A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, SHA-256d mining, "
                        "Ed25519 signatures. This app is a full node with a wallet, like Bitcoin-Qt.</p>"
-                       "<p>Networks: mainnet (from launch day), testnet and regtest, whose coins have no value.</p>"
+                       "<p>Networks: mainnet%3, testnet and regtest, whose coins have no value.</p>"
                        "<p>MIT License. Built with Qt %1%2.<br>"
                        "<a href=\"https://github.com/Sonic-Bound/Bound\">github.com/Sonic-Bound/Bound</a></p>")
             .arg(QString::fromLatin1(qVersion()),
-                 build_commit().empty() ? QString() : QStringLiteral(" from commit %1").arg(QString::fromStdString(std::string(build_commit())))));
+                 build_commit().empty() ? QString() : QStringLiteral(" from commit %1").arg(QString::fromStdString(std::string(build_commit()))),
+                 mainnet_params().launched ? QString() : QStringLiteral(" (from launch day)")));
     box.setTextFormat(Qt::RichText);
     box.exec();
 }

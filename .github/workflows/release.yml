@@ -40,6 +40,11 @@ jobs:
             echo "::error::docs/release-notes/v$version.md is missing"
             exit 1
           fi
+          # Milestone 15: notes written ahead mark what only launch day knows (docs/launch-day.md).
+          if grep -n 'LAUNCH-DAY' "docs/release-notes/v$version.md"; then
+            echo "::error::docs/release-notes/v$version.md still has LAUNCH-DAY placeholders"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   windows:

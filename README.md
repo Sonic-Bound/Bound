@@ -21,8 +21,9 @@
 </p>
 
 > [!NOTE]
-> BOUND runs as a **testnet**, whose coins have no value. **Mainnet is on its way:** see the
-> [road to mainnet](docs/mainnet-roadmap.md).
+> BOUND runs as a **testnet**, whose coins have no value. **Mainnet is ready to launch**, the way
+> Bitcoin did: a genesis quoting that day's headline, no premine, Bitcoin's difficulty 1. See the
+> [road to mainnet](docs/mainnet-roadmap.md) and [launch day](docs/launch-day.md).
 
 <p align="center">
   <img src="docs/screenshots/wallet.png" width="780" alt="The BOUND wallet: balances, the network, recent transactions">
@@ -74,9 +75,9 @@ Download it (above) or build it (below), then start the wallet app, or a node wi
     bound-qt                 # the desktop wallet: a full node with a window
     boundd node              # or a node on its own; talk to it with bound-cli
 
-A new node finds the network on its own: it asks the built-in seeds (`seed.bound.sarl`,
-`seed2.bound.sarl`), then learns about other nodes from its peers. To mine, open **Mining** in
-the app and press *Start mining*, or start the node with `boundd node --mine <address>`.
+A new node finds the network on its own: it asks the built-in seeds (the always-on nodes), then
+learns about other nodes from its peers. To mine, open **Mining** in the app and press *Start
+mining*, or start the node with `boundd node --mine <address>`.
 
 **Explorer:** [explorer.bound.sarl](https://explorer.bound.sarl) shows the testnet's blocks,
 transactions and addresses.
@@ -91,7 +92,7 @@ and each network keeps its chain in its own data directory.
 | Block time | 60 seconds | 10 minutes | 10 minutes |
 | Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 210,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
 | Supply | 20,999,999.727 BOUND | 20,999,999.9769 BOUND, no premine | |
-| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life | fixed and trivial: any CPU, instantly |
+| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life, from Bitcoin's difficulty 1 and never below | fixed and trivial: any CPU, instantly |
 | Addresses | start with `9` (51 characters) | start with `B` (52 characters) | start with `9` |
 | Ports | P2P 18333, RPC 18332 | P2P 7333, RPC 7332 | P2P 18544, RPC 18543 |
 
@@ -184,7 +185,7 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
 | 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
 | 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); servers: 2 of 3 up, [explorer](https://explorer.bound.sarl) and 2 DNS seeders live |
-| 15 | Mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
+| 15 | Mainnet launch: Bitcoin's difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | ready ✅ [notes](docs/milestone-15.md); the day: [runbook](docs/launch-day.md) |
 
 ## Layout
 

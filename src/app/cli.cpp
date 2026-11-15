@@ -28,8 +28,9 @@ int usage() {
                  "       bound-cli help             lists the methods\n"
                  "       bound-cli help <method>    explains one\n"
                  "       bound-cli --version\n"
-                 "The network's node is asked (testnet by default); its data directory defaults to "
-              << default_datadir().string() << " for testnet.\n";
+                 "The network's node is asked ("
+              << network_name(kDefaultNetwork) << " by default); its data directory defaults to " << default_datadir().string()
+              << " for " << network_name(kDefaultNetwork) << ".\n";
     return 2;
 }
 

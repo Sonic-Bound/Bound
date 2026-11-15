@@ -149,9 +149,9 @@ TEST(Asert, MatchesTheSpecificationsCode) {
     }
 }
 
-// Beyond the specification (an easy pow_limit, as mainnet's and the tests' are), the arithmetic
-// stays exact: one half-life behind schedule doubles the target, one ahead halves it, and the
-// clamps hold.
+// Beyond the specification (an easy pow_limit, as the tests' is, and mainnet's was until milestone
+// 15 chose Bitcoin's), the arithmetic stays exact: one half-life behind schedule doubles the
+// target, one ahead halves it, and the clamps hold.
 TEST(Asert, BehavesWithAnEasyPowLimit) {
     const arith_uint256 easy = target_of(0x207fffff);  // ~2^255, where the spec's 256 bits would overflow
     const arith_uint256 anchor = target_of(0x1f00ffff);

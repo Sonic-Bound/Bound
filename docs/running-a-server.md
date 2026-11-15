@@ -84,7 +84,9 @@ points to the server, `https://explorer.example.org` works.
 
 The seeder crawls the network, starting from the node beside it, and answers DNS for
 `seed.example.org` with nodes that are up. It needs **UDP 53** open in the provider's firewall. It
-prints the two records to add (the table above). Check it from anywhere:
+prints the two records to add (the table above). A machine runs one seeder, for one network,
+since only one program can hold its DNS port: setting one up for another network stops the first.
+Check it from anywhere:
 
     dig seed.example.org A
 
@@ -119,14 +121,19 @@ Two free services between them cover it:
 
 ## On launch day
 
-The same commands with `mainnet`, and **TCP 7333** opened in the firewall:
+[The launch](launch-day.md) publishes a release with mainnet's genesis. Then, on each server,
+`sudo bound-server install` for that release, **TCP 7333** opened in the provider's firewall, and:
 
     sudo bound-server node mainnet
-    sudo bound-server explorer mainnet explorer.example.org        # or a name of its own
-    sudo bound-server seeder mainnet mainnet-seed.example.org ns1.example.org you@example.org
+    sudo bound-server explorer testnet testnet-explorer.example.org   # testnet's explorer gets a name of its own
+    sudo bound-server explorer mainnet explorer.example.org           # and mainnet's takes the main one
+    sudo bound-server seeder mainnet seed.example.org ns1.example.org # the seeder moves to mainnet
     sudo bound-server monitor mainnet https://hc-ping.com/<another check>
 
-Testnet keeps running beside it. Each network has its own data directory, ports and services.
+(the explorer lines on the explorer's server, the seeder line on each seeder's). Testnet's node
+and explorer keep running beside mainnet's: each network has its own data directory, ports and
+services. Its seeders don't: each machine's DNS port answers for one network, so testnet nodes find
+each other through the always-on nodes' addresses, which are in testnet's `p.seeds`.
 
 ## Keeping it safe
 

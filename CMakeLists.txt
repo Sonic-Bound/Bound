@@ -133,6 +133,8 @@ add_library(bound_core STATIC
   src/seeder/crawler.cpp
   # milestone 9
   src/node/node.cpp
+  # milestone 15
+  src/core/genesis.cpp
 )
 target_include_directories(bound_core PUBLIC src)
 target_link_libraries(bound_core PUBLIC bound_version unofficial-sodium::sodium nlohmann_json::nlohmann_json Threads::Threads PRIVATE leveldb::leveldb)
@@ -220,6 +222,8 @@ add_executable(bound_tests
   tests/test_asert.cpp
   # milestone 13
   tests/test_version.cpp
+  # milestone 15
+  tests/test_genesis.cpp
 )
 target_link_libraries(bound_tests PRIVATE bound_core leveldb::leveldb GTest::gtest GTest::gtest_main)
 # Milestone 11: test vectors read at run time (tests/data).

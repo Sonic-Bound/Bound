@@ -12,7 +12,7 @@ testnet keeps running beside it, as Bitcoin's does.
 | Reward | 50 BOUND, halving every 210,000 blocks (~4 years) | 5 BOUND, halving every 2,100,000 blocks |
 | Supply | 20,999,999.9769 BOUND, Bitcoin's exact schedule | 20,999,999.727 BOUND |
 | Premine | none | none |
-| Difficulty | ASERT, adjusted every block (Bitcoin Cash's aserti3-2d) | Bitcoin's rule: daily, at most 4× |
+| Difficulty | ASERT, adjusted every block (Bitcoin Cash's aserti3-2d), from Bitcoin's difficulty 1, never lower | Bitcoin's rule: daily, at most 4× |
 | Addresses | start with `B` (2-byte version, 52 characters) | start with `9` |
 | Default network | testnet until launch day; then mainnet, with `--testnet` for testnet | |
 
@@ -28,7 +28,7 @@ timestamps at most 2 hours ahead, the timewarp-proof time rules, full RBF.
 | 12 | **Hardening for real value** | fuzz tests for every parser (messages, blocks, transactions, addresses, HTTP/RPC); sanitizer builds (ASan, UBSan) in CI; Windows CI; a consensus review checklist (overflow, malleability, time rules, resource limits); wallet review; `SECURITY.md` and a private way to report bugs; a faster miner (SHA-256 midstate, one thread per core: today's does ~650,000 hashes a second on one thread) | ✅ done ([notes](milestone-12.md), [review](consensus-review.md)) |
 | 13 | **Releases** | versioned GitHub releases: a Windows zip with the Qt files and a Linux tarball, SHA-256 checksums, signed; release notes | ✅ done ([notes](milestone-13.md), [how](release-process.md)) |
 | 14 | **Launch infrastructure** | at least 3 always-on nodes with different providers and regions; a domain with a DNS seeder; a public explorer over HTTPS; monitoring | tools ✅ ([notes](milestone-14.md), [guide](running-a-server.md)); servers: 2 of 3 up (Google Cloud, Azure), `bound.sarl` with the explorer and 2 DNS seeders; still to do: a third provider, monitoring |
-| 15 | **Launch** | the final genesis, its message quoting a headline from launch day so nobody can have mined before it (that's how Bitcoin showed it had no premine); an initial difficulty that fits the expected hash rate; the date and binaries announced ahead; the default network flipped to mainnet | |
+| 15 | **Launch** | the final genesis, its message quoting a headline from launch day so nobody can have mined before it (that's how Bitcoin showed it had no premine); Bitcoin's difficulty 1 to start (the project owner's choice); the release as the announcement; the default network flipped to mainnet | ready ✅ ([notes](milestone-15.md)); the day itself: [runbook](launch-day.md) |
 
 After launch, each release raises `minimum_chain_work` (and could add an assumed-valid block) so
 that new nodes can't be fed a cheap fake chain.

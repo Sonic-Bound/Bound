@@ -84,6 +84,10 @@ TEST(Networks, MainnetHasBitcoinsSchedule) {
     EXPECT_EQ(p.coinbase_maturity, 100);
     EXPECT_EQ(p.max_block_size, 1'000'000u);
     EXPECT_EQ(p.max_future_block_time, 2 * 60 * 60);
+    // Milestone 15: Bitcoin's difficulty 1, where the chain starts and the easiest it can get.
+    EXPECT_EQ(p.pow_limit_bits, 0x1d00ffffu);
+    EXPECT_EQ(p.genesis.bits, 0x1d00ffffu);
+    EXPECT_DOUBLE_EQ(difficulty(p.genesis.bits, p), 1.0);
     EXPECT_FALSE(p.launched);  // until launch day mines the real genesis
     EXPECT_TRUE(testnet_params().launched);
     EXPECT_EQ(total_supply(testnet_params()), Amount{2'099'999'972'700'000});  // unchanged

@@ -1,5 +1,5 @@
-// boundd, the BOUND node. The network comes first: --testnet (the default until mainnet
-// launches), --mainnet or --regtest. Each keeps its chain in its own data directory (default
+// boundd, the BOUND node. The network comes first: --mainnet, --testnet or --regtest, and
+// kDefaultNetwork (core/params.h) if none. Each keeps its chain in its own data directory (default
 // %APPDATA%\BOUND\<network>, or ~/.bound/<network>):
 //   boundd [network] [--datadir <dir>] node [--port <p>] [--rpcport <p>] [--nolisten | --local]
 //                                 [--connect <host[:port]>]... [--seednode <host[:port]>]...
@@ -24,11 +24,14 @@
 //   boundd demo                     mine, wait out coinbase maturity, pay someone through the
 //                                   mempool, lose the payment to a reorganisation, and see the
 //                                   mempool put it back
-//   boundd genesis [message] [time] mine a genesis block for the network (prints the values for
-//                                   params.cpp)
+//   boundd genesis [message] [time | now]
+//                                   mine a genesis block for the network on every core, and print
+//                                   the values for params.cpp; without arguments, the network's
+//                                   own genesis again, which checks it (milestone 15)
 #include "app/datadir.h"
 #include "core/address.h"
 #include "core/consensus.h"
+#include "core/genesis.h"
 #include "core/leveldb_store.h"
 #include "core/mempool.h"
 #include "core/miner.h"
@@ -42,6 +45,7 @@
 #include "util/time.h"
 #include "util/version.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -54,8 +58,10 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -246,21 +252,65 @@ int cmd_balance(const std::filesystem::path& datadir, std::string_view address) 
     return 0;
 }
 
+// For a C++ string literal: in printable ASCII only backslashes and quotes need escaping.
+std::string cpp_string(std::string_view text) {
+    std::string out;
+    for (const char c : text) {
+        if (c == '\\' || c == '"') out += '\\';
+        out += c;
+    }
+    return out;
+}
+
+// Milestone 15: mines the network's genesis on every core (core/genesis.h) and prints the lines for
+// params.cpp. Launch day runs it with that day's headline. With no message and time it mines the
+// network's own genesis again, which checks it: the search always finds the same block.
 int cmd_genesis(std::string_view message, std::uint32_t time) {
     const ConsensusParams& p = params();
-    if (message.size() > Transaction::kMaxMemo) throw std::invalid_argument("message is longer than 100 bytes");
-    Block g;
-    g.txs.push_back(make_coinbase(0, block_subsidy(0, p), PublicKey{}, bytes_of(message)));
-    g.header.merkle_root = g.compute_merkle_root();
-    g.header.time = time;
-    g.header.bits = p.pow_limit_bits;
-    const std::optional<BlockHeader> solved = mine(g.header, p.pow_limit);
-    if (!solved) throw std::runtime_error("no nonce works for this time; try another time");
-    std::cout << "message      " << message << "\n"
-              << "time         " << time << "\n"
-              << "merkle root  " << solved->merkle_root.to_hex() << "\n"
-              << "nonce        " << solved->nonce << "\n"
-              << "genesis hash " << solved->hash().to_hex() << "\n";
+    for (const char c : message) {
+        if (c < 0x20 || c > 0x7e) throw std::invalid_argument("the message must be printable ASCII");
+    }
+    const std::optional<Block> unmined = make_genesis(message, block_subsidy(0, p), time, p.pow_limit_bits);
+    if (!unmined) throw std::invalid_argument(std::format("the message is {} characters; at most {} fit", message.size(), Transaction::kMaxMemo));
+
+    std::signal(SIGINT, on_interrupt);
+    std::signal(SIGTERM, on_interrupt);
+    const unsigned threads = std::max(1u, std::thread::hardware_concurrency());
+    std::cerr << std::format("Mining {}'s genesis on {} threads, from {} UTC (Ctrl+C stops)\n", p.network_name, threads, format_utc(time));
+    const auto started = std::chrono::steady_clock::now();
+    const auto seconds = [&] {
+        return std::max<std::int64_t>(1, std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started).count());
+    };
+    std::stop_source stop;
+    std::int64_t reported = 0;
+    const std::optional<BlockHeader> header = mine_genesis(unmined->header, p.pow_limit, threads, stop.get_token(), [&](std::uint64_t hashes) {
+        if (g_interrupted) stop.request_stop();
+        const std::int64_t s = seconds();
+        if (s - reported < 10) return;
+        reported = s;
+        std::cerr << std::format("  {:.2f} billion hashes in {} s, {:.2f} MH/s\n", static_cast<double>(hashes) / 1e9, s,
+                                 static_cast<double>(hashes) / 1e6 / static_cast<double>(s));
+    });
+    if (!header) throw std::runtime_error("stopped before finding it");
+
+    const uint256 hash = header->hash();
+    std::cerr << std::format("Found in {} s\n", seconds());
+    std::cout << std::format("{} genesis\n", p.network_name)
+              << std::format("  hash         {}\n", hash.to_hex())
+              << std::format("  merkle root  {}\n", header->merkle_root.to_hex())
+              << std::format("  time         {} ({} UTC)\n", header->time, format_utc(header->time))
+              << std::format("  bits         0x{:08x}\n", header->bits)
+              << std::format("  nonce        {}\n", header->nonce)
+              << std::format("  message      {}\n\n", message)
+              << "For src/core/params.cpp:\n"
+              << std::format("    p.genesis_coinbase = make_coinbase(0, {} * kCoin, PublicKey{{}},\n", block_subsidy(0, p) / kCoin)
+              << std::format("                                       bytes_of(\"{}\"));\n", cpp_string(message))
+              << "    p.genesis.version = 1;\n"
+              << "    p.genesis.merkle_root = genesis_block(p).compute_merkle_root();\n"
+              << std::format("    p.genesis.time = {};  // {} UTC\n", header->time, format_utc(header->time))
+              << "    p.genesis.bits = p.pow_limit_bits;\n"
+              << std::format("    p.genesis.nonce = {};\n", header->nonce)
+              << std::format("    p.genesis_hash = uint256::from_hex(\"{}\").value();\n", hash.to_hex());
     return 0;
 }
 
@@ -273,10 +323,10 @@ int usage() {
                  "       boundd [network] [--datadir <dir>] info\n"
                  "       boundd [network] [--datadir <dir>] balance <address>\n"
                  "       boundd [network] demo\n"
-                 "       boundd [network] genesis [message] [unix-time]\n"
+                 "       boundd [network] genesis [message] [unix-time | now]\n"
                  "       boundd --version\n"
-                 "The network is --testnet (the default until mainnet launches), --mainnet or --regtest.\n"
-                 "The data directory defaults to "
+                 "The network is --mainnet, --testnet or --regtest; --"
+              << network_name(kDefaultNetwork) << " if none is given.\nThe data directory defaults to "
               << default_datadir(g_network).string() << ". Talk to a running node with bound-cli.\n";
     return 2;
 }
@@ -316,8 +366,9 @@ int main(int argc, char** argv) {
             const std::string default_message = std::string(
                 params().genesis_coinbase.memo.begin(), params().genesis_coinbase.memo.end());
             const std::string_view message = args.size() >= 2 ? args[1] : std::string_view(default_message);
-            const auto time = args.size() == 3 ? static_cast<std::uint32_t>(std::stoul(std::string(args[2])))
-                                               : params().genesis.time;
+            const auto time = args.size() < 3      ? params().genesis.time
+                              : args[2] == "now" ? static_cast<std::uint32_t>(unix_now())
+                                                 : static_cast<std::uint32_t>(std::stoul(std::string(args[2])));
             return cmd_genesis(message, time);
         }
         return usage();

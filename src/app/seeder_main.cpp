@@ -1,5 +1,6 @@
-// bound-seeder: a DNS seed for a BOUND network (the job of Bitcoin's DNS seeders); testnet unless
-// --mainnet or --regtest says otherwise.
+// bound-seeder: a DNS seed for a BOUND network (the job of Bitcoin's DNS seeders); the default
+// network (kDefaultNetwork) unless --mainnet, --testnet or --regtest says otherwise. One per
+// machine: it answers DNS on port 53, which only one program can hold.
 //   bound-seeder [--mainnet | --testnet | --regtest] --host <name> --ns <name> [--mbox <name>] [--dnsport <port>] [--dnsaddr <ip>]
 //                [--node <host[:port]>]... [--datadir <dir>] [--probes <n>] [--allowprivate] [--quiet]
 // It crawls the network, starting from the --node addresses (and whatever it remembered in

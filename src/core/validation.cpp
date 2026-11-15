@@ -185,6 +185,14 @@ void Chainstate::load() {
     const ChainMeta meta = decode_meta(*db_.get(meta_key()));
     if (meta.version != kChainDbVersion) throw std::runtime_error(std::format("unknown storage version {}", meta.version));
     if (meta.genesis != params_.genesis.hash()) {
+        // Milestone 15: the same network with another genesis is a chain from before it launched
+        // (0.10.0's --mainnet ran a provisional one). Nothing on it carries over.
+        if (meta.network == params_.network_name) {
+            throw std::runtime_error(std::format(
+                "the stored {} chain starts from another genesis block ({}), a preview from before {} launched: "
+                "move this data directory aside to start the real chain",
+                meta.network, meta.genesis.to_hex(), meta.network));
+        }
         throw std::runtime_error("the stored chain belongs to another network (" + meta.network + ")");
     }
 

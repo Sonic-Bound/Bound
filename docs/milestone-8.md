@@ -169,7 +169,8 @@ The system's packages stand in for vcpkg; libsodium comes through pkg-config.
 Progress (2026-11-15): two always-on nodes run, on Google Cloud and Microsoft Azure, with the
 DNS seeders `seed.bound.sarl` and `seed2.bound.sarl` and the explorer at
 https://explorer.bound.sarl, all set up with `bound-server` ([milestone 14](milestone-14.md)).
-`p.seeds` lists the seeders and both nodes.
+Mainnet's `p.seeds` lists the seeders and both nodes; testnet's lists the nodes, since the seeders
+move to mainnet on launch day ([milestone 15](milestone-15.md)).
 
 1. **Machines.** At least two always-on servers, each running `boundd` (unit in
    `contrib/systemd`), with TCP 18333 open. Two are up.

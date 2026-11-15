@@ -50,8 +50,8 @@ int usage() {
                  "                      [--port <port>] [--public] [--title <text>] [--staleafter <seconds>] [--quiet]\n"
                  "Serves a block explorer for the BOUND node on this machine at http://127.0.0.1:<port>\n"
                  "(default 8080); --public serves it on every interface. The node's data directory\n"
-                 "defaults to the network's (testnet's: "
-              << default_datadir().string() << ").\n"
+                 "defaults to the network's ("
+              << network_name(kDefaultNetwork) << "'s: " << default_datadir().string() << ").\n"
                  "/health answers 503 for uptime monitors when the node is down, has no peers, or has had\n"
                  "no block for --staleafter seconds (default: 12 blocks' time, at least an hour).\n";
     return 2;
