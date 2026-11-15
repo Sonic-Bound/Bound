@@ -59,6 +59,10 @@ public:
     // An address to try. false if it's known already, or unusable (port 0, or private without
     // allow_private), or the list is full.
     bool add(const NetAddress& addr, std::int64_t now);
+    // A starting point the operator named (--node). Probed even if it's private or local, such as
+    // the node on the seeder's own machine, whose getaddr reply leads to the rest of the network;
+    // but like every private address it's never handed out. Milestone 14.
+    bool add_start(const NetAddress& addr, std::int64_t now);
     // Ends probes that took too long, forgets hopeless addresses, starts the probes that are due.
     void tick(std::int64_t now);
     void add_poll_items(std::vector<PollItem>& items) override;

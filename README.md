@@ -53,11 +53,14 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
   ([milestone 12](docs/milestone-12.md), [consensus review](docs/consensus-review.md)). Found a
   vulnerability? See [SECURITY.md](SECURITY.md).
 - **Infrastructure.** It comes with a DNS seeder (`bound-seeder`), a web block explorer
-  (`bound-explorer`), JSON-RPC with `bound-cli`, and systemd units for servers.
+  (`bound-explorer`), JSON-RPC with `bound-cli`, and `bound-server`, which sets a Linux server
+  up in one command per job: a node, the explorer over HTTPS, a seeder, health reports
+  ([running a server](docs/running-a-server.md)).
 
 ## Download
 
-Ready-made packages for Windows (the wallet app and the command-line programs) and Linux are on the
+Ready-made packages for Windows (the wallet app and the command-line programs) and Linux (x86-64 and
+64-bit ARM) are on the
 [releases page](https://github.com/Sonic-Bound/Bound/releases). Unzip and run: nothing else to
 install. Each release lists the files' SHA-256 checksums, and GitHub attests that its own build
 servers made every file from the tagged source: check one with
@@ -111,8 +114,8 @@ thrown away.
     ctest --preset linux-debug           # after cmake --build --preset linux-debug
 
 The programs land in `build/linux/Release`. Without Qt everything but `bound-qt` still builds; add
-`-DBOUND_GUI=OFF` to `cmake --preset linux` to skip it quietly. Servers can run the node, the
-explorer and the seeder as services: see [contrib/systemd](contrib/systemd).
+`-DBOUND_GUI=OFF` to `cmake --preset linux` to skip it quietly. For a server, use a release
+package and `bound-server` instead: see [running a server](docs/running-a-server.md).
 
 </details>
 
@@ -177,7 +180,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 11 | ASERT difficulty for mainnet, checked against Bitcoin Cash's test vectors | ✅ [notes](docs/milestone-11.md) |
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
 | 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
-| 14–15 | Launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
+| 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); the servers: in progress |
+| 15 | Mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout
 
@@ -196,7 +200,7 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
     src/app       boundd, bound-cli, bound-explorer, bound-seeder
     tests         GoogleTest suites, one per area
     docs          design notes for each milestone
-    contrib       systemd units for the node, the explorer and the seeder; release packaging
+    contrib       release packaging, bound-server, systemd units
 
 ## License
 

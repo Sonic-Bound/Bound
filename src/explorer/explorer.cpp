@@ -218,25 +218,59 @@ HttpResponse Explorer::handle(const HttpRequest& request) {
     if (const auto hit = cache_.find(key); hit != cache_.end() && now - hit->second.time < options_.cache_seconds) {
         return hit->second.response;
     }
-    Page page;
-    try {
-        page = route(path, query);
-    } catch (const RpcError& e) {
-        if (e.code == rpc_error::kInvalidAddressOrKey || e.code == rpc_error::kInvalidParameter) {
-            page = message(404, "Not found", "The node knows of nothing by that name.");
-        } else {
-            page = message(502, "The node refused", e.what());
+    HttpResponse response;
+    if (path == "/health") {
+        response = health(now);
+    } else {
+        Page page;
+        try {
+            page = route(path, query);
+        } catch (const RpcError& e) {
+            if (e.code == rpc_error::kInvalidAddressOrKey || e.code == rpc_error::kInvalidParameter) {
+                page = message(404, "Not found", "The node knows of nothing by that name.");
+            } else {
+                page = message(502, "The node refused", e.what());
+            }
+        } catch (const std::exception&) {
+            page = message(503, "The node isn't answering",
+                           "This explorer shows what its BOUND node tells it, and the node isn't answering right now. Try again in a moment.");
         }
-    } catch (const std::exception&) {
-        page = message(503, "The node isn't answering",
-                       "This explorer shows what its BOUND node tells it, and the node isn't answering right now. Try again in a moment.");
+        response = render(page);
     }
-    HttpResponse response = render(page);
     if (response.status == 200 || response.status == 404) {
         if (cache_.size() >= options_.cache_pages) cache_.clear();
         cache_[key] = Cached{response, now};
     }
     return response;
+}
+
+std::int64_t default_stale_after(std::int64_t block_spacing) { return std::max<std::int64_t>(3600, 12 * block_spacing); }
+
+// Milestone 14: what an uptime monitor polls. Healthy means the node answers, has at least one
+// peer and its newest block isn't overdue; anything else is a 503 with the reason, which most
+// monitors put in their alert.
+HttpResponse Explorer::health(std::int64_t now) const {
+    json report = {{"network", options_.network}};
+    std::string problem;
+    try {
+        const json chain = call("getblockchaininfo");
+        const json network = call("getnetworkinfo");
+        const std::int64_t tip_time = chain.value("time", std::int64_t{0});
+        const std::int64_t peers = network.value("connections", std::int64_t{0});
+        report["height"] = chain.value("blocks", std::int64_t{0});
+        report["tip_age"] = now - tip_time;
+        report["peers"] = peers;
+        if (peers == 0) {
+            problem = "the node has no peers";
+        } else if (now - tip_time > options_.stale_after) {
+            problem = std::format("no block for {} minutes", (now - tip_time) / 60);
+        }
+    } catch (const std::exception&) {
+        problem = "the node isn't answering";
+    }
+    report["status"] = problem.empty() ? "ok" : "unhealthy";
+    if (!problem.empty()) report["problem"] = problem;
+    return {problem.empty() ? 200 : 503, report.dump() + "\n", "application/json", {{"Cache-Control", "no-store"}}};
 }
 
 Explorer::Page Explorer::route(std::string_view path, const std::map<std::string, std::string>& query) {

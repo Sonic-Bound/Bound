@@ -24,6 +24,8 @@ namespace bound {
 //   /address/<address>   an address's balance and history (needs the node's --index)
 //   /mempool             what's waiting for a block
 //   /search?q=...        a height, block hash, txid or address: redirects to its page
+//   /health              for uptime monitors (milestone 14): JSON, 200 when the node answers,
+//                        has peers and has a fresh block; 503 and the reason otherwise
 //
 // Everything that comes from the node or from the URL is HTML-escaped on its way into a page (a
 // transaction's memo is whatever its sender typed), and pages carry a Content-Security-Policy
@@ -41,7 +43,12 @@ struct ExplorerOptions {
     std::size_t max_rows = 500;     // rows of a block's or the mempool's transactions shown
     std::int64_t cache_seconds = 2;  // a page is built at most once in this long...
     std::size_t cache_pages = 256;   // ...for this many different URLs
+    std::int64_t stale_after = 3600;  // /health: the newest block is overdue after this long
 };
+
+// /health's limit for a network with this block spacing: twelve blocks' time, and never under an
+// hour. Twelve blocks' time with no block happens by chance about once in 160,000 blocks.
+std::int64_t default_stale_after(std::int64_t block_spacing);
 
 class Explorer {
 public:
@@ -67,6 +74,7 @@ private:
     Page mempool();
     Page search(std::string_view text);
     Page message(int status, std::string title, const std::string& text) const;
+    HttpResponse health(std::int64_t now) const;
     HttpResponse render(const Page& page) const;
     json call(const std::string& method, const json& params = json::array()) const { return rpc_(method, params); }
 

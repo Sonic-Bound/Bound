@@ -98,7 +98,7 @@ To run one you need a domain. Delegate a name to the seeder's machine, in the pa
     ns.example.org.    A   203.0.113.10
 
 Then run `bound-seeder --host seed.example.org --ns ns.example.org --dnsaddr 203.0.113.10
---node <a node>`. `contrib/systemd/bound-seeder.service` does this as a service, with port 53 the
+--node <a node>`. `contrib/systemd/bound-seeder@.service` does this as a service (per network since milestone 14), with port 53 the
 only privilege it has.
 
 ## The explorer

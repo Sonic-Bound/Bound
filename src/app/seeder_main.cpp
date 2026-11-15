@@ -54,7 +54,9 @@ int usage() {
                  "  --ns       this machine's name, which the parent zone delegates the seed's name to\n"
                  "  --mbox     the operator's mailbox, DNS style (hostmaster.example.org); default hostmaster.<host>\n"
                  "  --dnsport  53 unless said otherwise; --dnsaddr binds one address instead of all\n"
-                 "  --node     a node to start crawling from (the network's port unless one is given)\n"
+                 "  --node     a node to start crawling from (the network's port unless one is given); the\n"
+                 "             node on this machine, 127.0.0.1, works too, though only public addresses\n"
+                 "             are ever handed out\n"
                  "  --datadir  where seeder.dat is kept; default <the network's data directory>/seeder, e.g. "
               << (default_datadir() / "seeder").string() << "\n";
     return 2;
@@ -151,7 +153,7 @@ int main(int argc, char** argv) {
         for (const std::string& node : nodes) {
             const std::vector<NetAddress> found = resolve(node, params.default_port);
             if (found.empty()) log_line("can't resolve " + node);
-            for (const NetAddress& addr : found) crawler.add(addr, started);
+            for (const NetAddress& addr : found) crawler.add_start(addr, started);
         }
         if (crawler.size() == 0) throw std::runtime_error("no addresses to start from: give one or more --node");
 

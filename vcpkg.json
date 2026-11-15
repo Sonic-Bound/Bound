@@ -2,7 +2,12 @@
   "name": "bound",
   "dependencies": [
     "gtest",
-    "leveldb",
+    {
+      "name": "leveldb",
+      "features": [
+        "snappy"
+      ]
+    },
     "libsodium",
     "nlohmann-json"
   ],

@@ -47,11 +47,13 @@ std::string printable(std::string_view text) {
 
 int usage() {
     std::cerr << "usage: bound-explorer [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>]\n"
-                 "                      [--port <port>] [--public] [--title <text>] [--quiet]\n"
+                 "                      [--port <port>] [--public] [--title <text>] [--staleafter <seconds>] [--quiet]\n"
                  "Serves a block explorer for the BOUND node on this machine at http://127.0.0.1:<port>\n"
                  "(default 8080); --public serves it on every interface. The node's data directory\n"
                  "defaults to the network's (testnet's: "
-              << default_datadir().string() << ").\n";
+              << default_datadir().string() << ").\n"
+                 "/health answers 503 for uptime monitors when the node is down, has no peers, or has had\n"
+                 "no block for --staleafter seconds (default: 12 blocks' time, at least an hour).\n";
     return 2;
 }
 
@@ -79,6 +81,7 @@ int main(int argc, char** argv) {
         ExplorerOptions options;
         options.network = std::string(network_name(network));
         options.title = network == Network::Mainnet ? "BOUND explorer" : "BOUND " + options.network + " explorer";
+        options.stale_after = default_stale_after(params_for(network).target_spacing);  // milestone 14
         for (std::size_t i = 0; i < args.size(); ++i) {
             const bool has_value = i + 1 < args.size();
             if (args[i] == "--datadir" && has_value) {
@@ -89,6 +92,9 @@ int main(int argc, char** argv) {
                 port = parse_port(args[++i]);
             } else if (args[i] == "--title" && has_value) {
                 options.title = std::string(args[++i]);
+            } else if (args[i] == "--staleafter" && has_value) {
+                options.stale_after = std::stoll(std::string(args[++i]));
+                if (options.stale_after <= 0) throw std::invalid_argument("--staleafter takes a number of seconds");
             } else if (args[i] == "--public") {
                 open_to_all = true;
             } else if (args[i] == "--quiet") {

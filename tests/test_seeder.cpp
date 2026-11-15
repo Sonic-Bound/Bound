@@ -356,3 +356,51 @@ TEST(Seeder, KeepsOnlyUsableAddresses) {
     EXPECT_THROW(crawler.load(Bytes{9}), DeserializeError);
     EXPECT_THROW(crawler.load(Bytes{1, 200}), DeserializeError);
 }
+
+// Milestone 14: a public seeder can start from the node beside it on 127.0.0.1 (--node), which
+// leads it to the network, but a local address is never what it hands out, nor is any private
+// address that node tells it about.
+TEST(Seeder, StartsFromItsOwnNodeButNeverHandsItOut) {
+    const ConsensusParams params = easy_params();
+    Chainstate chain(params);
+    Mempool mempool(chain);
+    mine_blocks(chain, test_key("alice").public_key(), 3);
+    AddrMan addrs(1);
+    const NetAddress lan_peer = NetAddress::ipv4(192, 168, 1, 7, 18444);
+    addrs.add(lan_peer, kTestNow);
+    BanMan bans;
+    PeerManager peers(chain, mempool, addrs, bans, {}, 1);
+    ConnmanOptions listening;
+    listening.loopback_only = true;
+    Connman net(peers, addrs, bans, listening, {}, [] { return kTestNow; });
+    const NetAddress node = NetAddress::ipv4(127, 0, 0, 1, net.port());
+    std::thread thread([&] { net.run(); });
+
+    CrawlerOptions options;
+    options.magic = params.message_start;
+    options.default_port = net.port();
+    options.connect_timeout = 3;
+    Crawler crawler(options, 5);
+    EXPECT_FALSE(crawler.add(node, kTestNow));  // from gossip, a local address is refused
+    ASSERT_TRUE(crawler.add_start(node, kTestNow));
+    EXPECT_FALSE(crawler.add_start(node, kTestNow));
+    EXPECT_FALSE(crawler.add_start(NetAddress::ipv4(127, 0, 0, 1, 0), kTestNow));
+    const auto answered = [&] {
+        const NodeRecord* r = crawler.find(node);
+        return r != nullptr && r->successes > 0;
+    };
+    for (int i = 0; i < 250 && !answered(); ++i) {
+        crawler.tick(kTestNow);
+        std::vector<PollItem> items;
+        crawler.add_poll_items(items);
+        poll(items, 20);
+        crawler.handle_poll(items, kTestNow);
+    }
+    net.stop();
+    thread.join();
+
+    ASSERT_TRUE(answered());
+    EXPECT_EQ(crawler.find(node)->height, 3);
+    EXPECT_TRUE(crawler.good(kTestNow).empty());
+    EXPECT_EQ(crawler.find(lan_peer), nullptr);
+}

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Milestone 13: builds BOUND's programs for Linux x86-64 from this checkout and packs them the way a
+# Milestone 13: builds BOUND's programs for Linux from this checkout and packs them the way a
 # release ships them:
 #
-#   dist/bound-<version>-x86_64-linux-gnu.tar.gz    bound-<version>/bin: boundd, bound-cli,
-#                                                   bound-explorer, bound-seeder; share/bound/systemd
+#   dist/bound-<version>-<arch>-linux-gnu.tar.gz    bound-<version>/bin: boundd, bound-cli,
+#                                                   bound-explorer, bound-seeder; share/bound: the
+#                                                   systemd units and bound-server (milestone 14)
+#
+# <arch> is the machine's: x86_64, or aarch64 (64-bit ARM: Oracle's and AWS's ARM servers, a
+# Raspberry Pi with a 64-bit system).
 #
 # The libraries (libsodium, LevelDB) come from vcpkg and are linked in statically, as is the C++
 # runtime, so the programs need nothing but glibc: no packages to install. glibc is the one library
@@ -21,9 +25,15 @@ build=${BUILD_DIR:-build/package-linux}
 [[ -f CMakeLists.txt && -d contrib/release ]] || { echo "run this at the repository's root" >&2; exit 1; }
 [[ -n "${VCPKG_ROOT:-}" ]] || { echo "set VCPKG_ROOT to a vcpkg checkout" >&2; exit 1; }
 
-echo "== Configuring $build"
+case "$(uname -m)" in
+  x86_64) arch=x86_64 triplet=x64-linux ;;
+  aarch64 | arm64) arch=aarch64 triplet=arm64-linux ;;
+  *) echo "no release build for $(uname -m)" >&2; exit 1 ;;
+esac
+
+echo "== Configuring $build ($arch)"
 cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBOUND_GUI=OFF \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-linux \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET="$triplet" \
   -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
 echo "== Building (Release)"
 cmake --build "$build"
@@ -69,7 +79,7 @@ done
 echo "   boundd demo: mined, paid, reorganised"
 
 echo "== Packing"
-archive=$name-x86_64-linux-gnu.tar.gz
+archive=$name-$arch-linux-gnu.tar.gz
 # Fixed owners, order and times, so the archive depends only on what's in it.
 epoch=$(git log -1 --format=%ct 2>/dev/null || date +%s)
 tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$epoch" -C "$out" -cf - "$name" | gzip -9n > "$out/$archive"

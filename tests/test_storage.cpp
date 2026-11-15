@@ -7,9 +7,12 @@
 #include "util/serialize.h"
 
 #include <gtest/gtest.h>
+#include <leveldb/db.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -130,6 +133,35 @@ TEST(LevelDbStore, SurvivesReopening) {
     }
     const LevelDbStore store(dir.path() / "db");
     EXPECT_EQ(store.get(B("k")), B("v"));
+}
+
+// Milestone 14: a node built against a Linux distribution's LevelDB wrote its chain compressed with
+// Snappy. Every build of ours has to read that (vcpkg's LevelDB couldn't, until its "snappy"
+// feature was turned on), or such a node can't move to a release package.
+TEST(LevelDbStore, ReadsWhatASnappyLevelDbWrote) {
+    TempDir dir;
+    const std::filesystem::path path = dir.path() / "db";
+    const std::string value(4000, 'x');
+    {
+        leveldb::Options options;
+        options.create_if_missing = true;
+        options.compression = leveldb::kSnappyCompression;
+        leveldb::DB* raw = nullptr;
+        ASSERT_TRUE(leveldb::DB::Open(options, path.string(), &raw).ok());
+        const std::unique_ptr<leveldb::DB> db(raw);
+        for (int i = 0; i < 50; ++i) ASSERT_TRUE(db->Put(leveldb::WriteOptions(), "key" + std::to_string(i), value).ok());
+        db->CompactRange(nullptr, nullptr);  // out of the log, into compressed table files
+    }
+    // The tables came out far smaller than the 200 KB put in: Snappy is really there.
+    std::uintmax_t tables = 0;
+    for (const auto& file : std::filesystem::directory_iterator(path)) {
+        if (file.path().extension() == ".ldb") tables += file.file_size();
+    }
+    ASSERT_GT(tables, 0u);
+    EXPECT_LT(tables, 50u * value.size() / 4);
+
+    const LevelDbStore store(path);
+    EXPECT_EQ(store.get(B("key7")), Bytes(value.begin(), value.end()));
 }
 
 TEST(LevelDbStore, OneOpenAtATime) {

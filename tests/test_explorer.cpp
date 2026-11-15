@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 using namespace bound;
@@ -135,6 +136,61 @@ TEST(Explorer, SaysSoWhenTheNodeIsDownOrRefuses) {
     const HttpResponse refused = refusing.handle(get("/mempool"));
     EXPECT_EQ(refused.status, 502);
     EXPECT_FALSE(shows(refused, "<b>broken"));
+}
+
+// Milestone 14: /health, for uptime monitors.
+TEST(Explorer, HealthSaysWhatsWrong) {
+    std::int64_t tip_time = kTestNow - 600;
+    std::int64_t peers = 3;
+    bool node_up = true;
+    ExplorerOptions options;
+    options.stale_after = 3600;
+    options.cache_seconds = 0;
+    Explorer explorer(
+        [&](const std::string& method, const json&) -> json {
+            if (!node_up) throw std::runtime_error("connection refused");
+            if (method == "getblockchaininfo") return {{"blocks", 120}, {"time", tip_time}};
+            if (method == "getnetworkinfo") return {{"connections", peers}};
+            ADD_FAILURE() << "unexpected call " << method;
+            return {};
+        },
+        kClock, options);
+    const auto health = [&] {
+        const HttpResponse r = explorer.handle(get("/health"));
+        EXPECT_EQ(r.content_type, "application/json");
+        EXPECT_EQ(header_of(r, "Cache-Control"), "no-store");
+        return std::pair(r.status, json::parse(r.body));
+    };
+
+    auto [status, report] = health();
+    EXPECT_EQ(status, 200);
+    EXPECT_EQ(report["status"], "ok");
+    EXPECT_EQ(report["network"], "testnet");
+    EXPECT_EQ(report["height"], 120);
+    EXPECT_EQ(report["tip_age"], 600);
+    EXPECT_EQ(report["peers"], 3);
+    EXPECT_FALSE(report.contains("problem"));
+
+    tip_time = kTestNow - 7200;
+    std::tie(status, report) = health();
+    EXPECT_EQ(status, 503);
+    EXPECT_EQ(report["status"], "unhealthy");
+    EXPECT_EQ(report["problem"], "no block for 120 minutes");
+
+    peers = 0;
+    std::tie(status, report) = health();
+    EXPECT_EQ(status, 503);
+    EXPECT_EQ(report["problem"], "the node has no peers");
+
+    node_up = false;
+    std::tie(status, report) = health();
+    EXPECT_EQ(status, 503);
+    EXPECT_EQ(report["problem"], "the node isn't answering");
+    EXPECT_FALSE(report.contains("height"));
+
+    // Twelve blocks' time, never under an hour.
+    EXPECT_EQ(default_stale_after(60), 3600);
+    EXPECT_EQ(default_stale_after(600), 7200);
 }
 
 TEST(Explorer, BuildsEachPageOncePerCachePeriod) {

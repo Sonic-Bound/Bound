@@ -82,29 +82,58 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  # The oldest glibc the programs run on is the build machine's, so each is built on the oldest
+  # system that has what the build needs.
   linux:
-    name: Linux x86-64 package
+    name: Linux ${{ matrix.arch }} package
     needs: check
-    # The oldest glibc the programs will run on is the build machine's: 2.35 here, so Ubuntu 22.04,
-    # Debian 12 and anything newer.
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc 2.35: Ubuntu 22.04, Debian 12 and newer. GCC 13 (for std::format) from the
+          # toolchain PPA.
+          - arch: x86_64
+            runner: ubuntu-22.04
+            max_glibc: '2.35'
+            toolchain_ppa: true
+          # Milestone 14, 64-bit ARM (Oracle's and AWS's ARM servers, a Raspberry Pi on a 64-bit
+          # system). glibc 2.39: Ubuntu 24.04, Debian 13, Raspberry Pi OS 13 and newer.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            max_glibc: '2.39'
+            toolchain_ppa: false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
-      - name: Install GCC 13 (for std::format), Ninja, and the autotools vcpkg builds libsodium with
+      - name: Install GCC 13, Ninja, and the autotools vcpkg builds libsodium with
         run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          if [[ "${{ matrix.toolchain_ppa }}" == true ]]; then sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test; fi
           sudo apt-get update
-          sudo apt-get install -y g++-13 ninja-build pkg-config autoconf automake libtool
+          sudo apt-get install -y g++-13 ninja-build pkg-config autoconf automake libtool curl zip unzip tar git
+          command -v cmake || sudo apt-get install -y cmake
+          cmake --version | head -1
+      - name: Get vcpkg
+        run: |
+          if [[ -x "${VCPKG_INSTALLATION_ROOT:-}/vcpkg" ]]; then
+            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          else
+            # vcpkg has no ready-made tools for ARM Linux: it uses the system's cmake and ninja.
+            if [[ "$(uname -m)" == aarch64 ]]; then export VCPKG_FORCE_SYSTEM_BINARIES=1; echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> "$GITHUB_ENV"; fi
+            git clone --depth 1 https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+            "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+            echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          fi
       - name: Build, test and package
         env:
           CC: gcc-13
           CXX: g++-13
-          MAX_GLIBC: '2.35'
-        run: VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT" bash contrib/release/package-linux.sh dist
+          MAX_GLIBC: ${{ matrix.max_glibc }}
+        run: bash contrib/release/package-linux.sh dist
       - uses: actions/upload-artifact@v4
         with:
-          name: linux
+          name: linux-${{ matrix.arch }}
           path: dist/*.tar.gz
           if-no-files-found: error
 

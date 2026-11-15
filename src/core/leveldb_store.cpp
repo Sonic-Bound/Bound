@@ -29,6 +29,12 @@ LevelDbStore::LevelDbStore(const std::filesystem::path& dir) {
     std::filesystem::create_directories(dir);
     leveldb::Options options;
     options.create_if_missing = true;
+    // Milestone 14: written uncompressed, as Bitcoin Core does, so that any LevelDB can read it.
+    // LevelDB compresses with Snappy by default when it was built with it (the Linux
+    // distributions' builds are) and can't read Snappy blocks when it wasn't (vcpkg's, until its
+    // "snappy" feature was turned on). Hashes and keys barely compress anyway. Blocks already
+    // written compressed are still read: every release build has Snappy (tests/test_storage.cpp).
+    options.compression = leveldb::kNoCompression;
     leveldb::DB* db = nullptr;
     check(leveldb::DB::Open(options, dir.string(), &db), "can't open the database");
     db_.reset(db);

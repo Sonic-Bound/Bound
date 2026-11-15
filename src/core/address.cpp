@@ -19,7 +19,7 @@ std::optional<PublicKey> decode_address(std::string_view s, const AddressVersion
     if (!payload || payload->size() != n + 32 || !std::equal(version.bytes.begin(), version.bytes.begin() + n, payload->begin())) {
         return std::nullopt;
     }
-    PublicKey pk;
+    PublicKey pk{};  // all 32 bytes are copied in below; {} keeps GCC -O2 from warning that they might not be
     std::copy(payload->begin() + static_cast<std::ptrdiff_t>(n), payload->end(), pk.begin());
     return pk;
 }

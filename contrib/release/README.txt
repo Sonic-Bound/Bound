@@ -26,8 +26,12 @@ Getting started
 
   Linux: bin/boundd node starts a node; bin/bound-cli getblockchaininfo shows how far it has synced.
   bin/bound-cli setmining true mines into the node's wallet (bound-cli createwallet makes one).
-  The programs need glibc 2.35 or newer: Ubuntu 22.04, Debian 12, Fedora 36 or later.
-  share/bound/systemd has service files for running a node, the explorer or the seeder on a server.
+  The x86_64 programs need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 or later); the
+  aarch64 ones need 2.39 (Ubuntu 24.04, Debian 13, Raspberry Pi OS 13 or later).
+
+  A server: sudo share/bound/bound-server install <this package>, then
+  sudo bound-server node testnet. It also sets up the explorer with HTTPS, a DNS seeder and
+  health reports; bound-server with no arguments lists how.
 
   The chain and the wallet are kept in %APPDATA%\BOUND\testnet on Windows and ~/.bound/testnet on
   Linux. Write down the seed the wallet shows when it is made: it is the only way to get the
@@ -46,5 +50,6 @@ Checking the download
 
 Licenses
   BOUND is under the MIT license (LICENSE). The libraries built into it keep their own licenses,
-  in licenses/: libsodium (ISC), LevelDB (BSD 3-clause) and nlohmann/json (MIT); in the Windows
-  package also Qt (LGPL v3), zlib, libpng, PCRE2 and double-conversion, which Qt uses.
+  in licenses/: libsodium (ISC), LevelDB and Snappy (BSD 3-clause) and nlohmann/json (MIT). The
+  Windows package also has Qt (LGPL v3), and zlib, libpng, PCRE2 and double-conversion, which Qt
+  uses.

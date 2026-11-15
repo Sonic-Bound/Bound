@@ -27,7 +27,12 @@ bool Crawler::usable(const NetAddress& addr) const {
 }
 
 bool Crawler::add(const NetAddress& addr, std::int64_t now) {
-    if (!usable(addr) || nodes_.contains(addr) || nodes_.size() >= options_.max_nodes) return false;
+    if (!usable(addr)) return false;
+    return add_start(addr, now);
+}
+
+bool Crawler::add_start(const NetAddress& addr, std::int64_t now) {
+    if (addr.port == 0 || addr.is_unspecified() || nodes_.contains(addr) || nodes_.size() >= options_.max_nodes) return false;
     NodeRecord& r = nodes_[addr];
     r.addr = addr;
     r.first_seen = now;

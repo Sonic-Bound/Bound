@@ -221,7 +221,7 @@ add_executable(bound_tests
   # milestone 13
   tests/test_version.cpp
 )
-target_link_libraries(bound_tests PRIVATE bound_core GTest::gtest GTest::gtest_main)
+target_link_libraries(bound_tests PRIVATE bound_core leveldb::leveldb GTest::gtest GTest::gtest_main)
 # Milestone 11: test vectors read at run time (tests/data).
 target_compile_definitions(bound_tests PRIVATE BOUND_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data")
 
@@ -340,11 +340,13 @@ else()
   set(bound_install_doc ${CMAKE_INSTALL_DOCDIR})
   install(TARGETS ${bound_programs} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   install(DIRECTORY contrib/systemd DESTINATION ${CMAKE_INSTALL_DATADIR}/bound)
+  # Milestone 14: sets a server up from the package (contrib/deploy/bound-server).
+  install(PROGRAMS contrib/deploy/bound-server DESTINATION ${CMAKE_INSTALL_DATADIR}/bound)
 endif()
 install(FILES LICENSE DESTINATION ${bound_install_doc})
 # The licenses of the libraries built in (vcpkg keeps each one's in share/<port>/copyright).
 if(DEFINED VCPKG_INSTALLED_DIR)
-  set(bound_shipped_ports libsodium leveldb nlohmann-json)
+  set(bound_shipped_ports libsodium leveldb snappy nlohmann-json)
   if(TARGET bound-qt)
     list(APPEND bound_shipped_ports qtbase double-conversion libpng pcre2 zlib)
   endif()
