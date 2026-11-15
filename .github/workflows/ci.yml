@@ -105,9 +105,11 @@ jobs:
           path: build/fuzz/findings
 
   windows:
-    name: Windows (MSVC)
+    # With the wallet app (milestone 13), so bound-qt is tested on Windows too and Qt stays in the
+    # cache the release workflow restores. The first run builds Qt: about an hour.
+    name: Windows (MSVC, with the wallet app)
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 180
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
     steps:
@@ -117,16 +119,26 @@ jobs:
           arch: x64
       - uses: seanmiddleditch/gha-setup-ninja@v5
       - name: Restore the vcpkg package cache
-        uses: actions/cache@v4
+        id: cache
+        uses: actions/cache/restore@v4
         with:
           path: vcpkg-cache
-          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
+          key: vcpkg-windows-gui-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
+          restore-keys: vcpkg-windows-gui-
       - name: Configure
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
-          cmake --preset msvc
+          cmake --preset msvc -DBOUND_GUI=ON
+      # Saved as soon as vcpkg has built everything, so a failing test can't cost the next run
+      # another hour of Qt.
+      - name: Save the vcpkg package cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-windows-gui-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
       - name: Build
         run: cmake --build --preset debug
       - name: Test

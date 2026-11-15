@@ -8,6 +8,7 @@
 #include "rpc/client.h"
 #include "rpc/http.h"
 #include "rpc/server.h"
+#include "util/version.h"
 
 #include <cstdint>
 #include <exception>
@@ -26,6 +27,7 @@ int usage() {
     std::cerr << "usage: bound-cli [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>] <method> [param]...\n"
                  "       bound-cli help             lists the methods\n"
                  "       bound-cli help <method>    explains one\n"
+                 "       bound-cli --version\n"
                  "The network's node is asked (testnet by default); its data directory defaults to "
               << default_datadir().string() << " for testnet.\n";
     return 2;
@@ -34,6 +36,10 @@ int usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (bound::asks_for_version(argc, argv)) {
+        std::cout << bound::version_text("bound-cli");
+        return 0;
+    }
     std::uint16_t port = 0;
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);

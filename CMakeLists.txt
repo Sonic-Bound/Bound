@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25...3.31)
 
 # Milestone 9: the desktop wallet, bound-qt, needs Qt 6.
 # - On Linux it's the system's package (qt6-base-dev on Debian or Ubuntu), so it's on by default.
@@ -15,7 +15,9 @@ if(BOUND_GUI)
   list(APPEND VCPKG_MANIFEST_FEATURES "gui")
 endif()
 
-project(bound VERSION 0.9.0 LANGUAGES CXX)
+# The one place BOUND's version is set (milestone 13): --version, the user agent peers see, the
+# Windows file properties and the release packages all take it from here.
+project(bound VERSION 0.10.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +61,20 @@ set(BOUND_FUZZ "" CACHE STRING "libfuzzer: build bound_fuzz for clang's libFuzze
 if(BOUND_FUZZ STREQUAL "libfuzzer")
   add_compile_options(-fsanitize=fuzzer-no-link)
 endif()
+
+# Milestone 13: the version, and the git commit recorded at every build (cmake/build_info.cmake), in
+# a library of their own so that a new commit recompiles one file.
+set(bound_generated ${CMAKE_BINARY_DIR}/generated)
+add_custom_target(bound_build_info
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -DOUTPUT=${bound_generated}/bound_build_info.h
+          -P ${CMAKE_SOURCE_DIR}/cmake/build_info.cmake
+  BYPRODUCTS ${bound_generated}/bound_build_info.h
+  COMMENT "Recording the git commit"
+  VERBATIM)
+add_library(bound_version STATIC src/util/version.cpp)
+add_dependencies(bound_version bound_build_info)
+target_include_directories(bound_version PUBLIC src PRIVATE ${bound_generated})
+target_compile_definitions(bound_version PRIVATE BOUND_VERSION="${PROJECT_VERSION}")
 
 # Everything except main() lives in bound_core, so the tests link the same code boundd runs.
 add_library(bound_core STATIC
@@ -119,22 +135,38 @@ add_library(bound_core STATIC
   src/node/node.cpp
 )
 target_include_directories(bound_core PUBLIC src)
-target_link_libraries(bound_core PUBLIC unofficial-sodium::sodium nlohmann_json::nlohmann_json Threads::Threads PRIVATE leveldb::leveldb)
+target_link_libraries(bound_core PUBLIC bound_version unofficial-sodium::sodium nlohmann_json::nlohmann_json Threads::Threads PRIVATE leveldb::leveldb)
 if(WIN32)
   target_link_libraries(bound_core PUBLIC ws2_32)
 endif()
 
+# Milestone 13: on Windows each program carries the BOUND icon and its description and version
+# (Explorer's Properties > Details), from cmake/program.rc.in.
+function(bound_windows_resources target description)
+  if(WIN32)
+    set(BOUND_PROGRAM ${target})
+    set(BOUND_DESCRIPTION "${description}")
+    set(BOUND_ICON "${CMAKE_SOURCE_DIR}/src/qt/res/bound.ico")
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/program.rc.in ${bound_generated}/${target}.rc @ONLY)
+    target_sources(${target} PRIVATE ${bound_generated}/${target}.rc)
+  endif()
+endfunction()
+
 add_executable(boundd src/app/main.cpp)
 target_link_libraries(boundd PRIVATE bound_core)
+bound_windows_resources(boundd "BOUND node")
 
 add_executable(bound-cli src/app/cli.cpp)
 target_link_libraries(bound-cli PRIVATE bound_core)
+bound_windows_resources(bound-cli "BOUND command-line RPC client")
 
 add_executable(bound-explorer src/app/explorer_main.cpp)
 target_link_libraries(bound-explorer PRIVATE bound_core)
+bound_windows_resources(bound-explorer "BOUND block explorer")
 
 add_executable(bound-seeder src/app/seeder_main.cpp)
 target_link_libraries(bound-seeder PRIVATE bound_core)
+bound_windows_resources(bound-seeder "BOUND DNS seeder")
 
 enable_testing()
 add_executable(bound_tests
@@ -186,6 +218,8 @@ add_executable(bound_tests
   tests/test_networks.cpp
   # milestone 11
   tests/test_asert.cpp
+  # milestone 13
+  tests/test_version.cpp
 )
 target_link_libraries(bound_tests PRIVATE bound_core GTest::gtest GTest::gtest_main)
 # Milestone 11: test vectors read at run time (tests/data).
@@ -193,6 +227,13 @@ target_compile_definitions(bound_tests PRIVATE BOUND_TEST_DATA_DIR="${CMAKE_SOUR
 
 include(GoogleTest)
 gtest_discover_tests(bound_tests DISCOVERY_MODE PRE_TEST)
+
+# Milestone 13: every program answers --version with this version.
+foreach(program boundd bound-cli bound-explorer bound-seeder)
+  add_test(NAME version_${program} COMMAND ${program} --version)
+  string(REPLACE "." "\\." version_pattern "${PROJECT_VERSION}")
+  set_tests_properties(version_${program} PROPERTIES PASS_REGULAR_EXPRESSION "^${program} ${version_pattern}[ \n]")
+endforeach()
 
 # Milestone 12: the fuzz targets (fuzz/fuzz.h). -DBOUND_FUZZ=libfuzzer builds them for clang's
 # libFuzzer (coverage-guided; CI runs each for a while); otherwise bound_fuzz mutates seeds itself,
@@ -235,12 +276,9 @@ if(BOUND_GUI AND Qt6_FOUND)
   )
   set_target_properties(bound_gui PROPERTIES AUTOMOC ON AUTORCC ON)
   target_link_libraries(bound_gui PUBLIC bound_core Qt6::Widgets)
-  target_compile_definitions(bound_gui PRIVATE BOUND_VERSION="${PROJECT_VERSION}")
 
   add_executable(bound-qt WIN32 src/qt/main.cpp)
-  if(WIN32)
-    target_sources(bound-qt PRIVATE src/qt/bound.rc)  # the .exe's icon
-  endif()
+  bound_windows_resources(bound-qt "BOUND wallet")
   target_link_libraries(bound-qt PRIVATE bound_gui)
 
   # The tests draw without a screen: Qt's "offscreen" platform where there is one (Linux), else
@@ -272,4 +310,48 @@ if(BOUND_GUI AND Qt6_FOUND)
       endforeach()
     endforeach()
   endif()
+endif()
+
+# Milestone 13: `cmake --install` lays the programs out the way a release ships them (the scripts in
+# contrib/release pack that up).
+# - Windows: one folder, bound-qt.exe beside every DLL it needs, Qt's platform plugin and the Visual
+#   C++ runtime, so it runs on a PC with nothing installed.
+# - Linux: bin/ and share/. A release build links its libraries statically (vcpkg's x64-linux).
+include(GNUInstallDirs)
+set(bound_programs boundd bound-cli bound-explorer bound-seeder)
+if(TARGET bound-qt)
+  list(APPEND bound_programs bound-qt)
+endif()
+if(WIN32)
+  set(bound_install_doc .)
+  install(TARGETS ${bound_programs} RUNTIME_DEPENDENCY_SET bound_dlls RUNTIME DESTINATION .)
+  # The DLLs come from vcpkg; Windows' own (System32, the api-ms-* sets) stay behind.
+  install(RUNTIME_DEPENDENCY_SET bound_dlls DESTINATION .
+    DIRECTORIES "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/$<$<CONFIG:Debug>:debug/>bin"
+    PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
+    POST_EXCLUDE_REGEXES "[Ss][Yy][Ss][Tt][Ee][Mm]32/")
+  if(TARGET bound-qt)
+    install(FILES $<TARGET_FILE:Qt6::QWindowsIntegrationPlugin> DESTINATION platforms)
+  endif()
+  # Visual C++'s runtime (vcruntime140.dll, msvcp140.dll, ...), which Microsoft lets programs carry.
+  set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+  include(InstallRequiredSystemLibraries)
+else()
+  set(bound_install_doc ${CMAKE_INSTALL_DOCDIR})
+  install(TARGETS ${bound_programs} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(DIRECTORY contrib/systemd DESTINATION ${CMAKE_INSTALL_DATADIR}/bound)
+endif()
+install(FILES LICENSE DESTINATION ${bound_install_doc})
+# The licenses of the libraries built in (vcpkg keeps each one's in share/<port>/copyright).
+if(DEFINED VCPKG_INSTALLED_DIR)
+  set(bound_shipped_ports libsodium leveldb nlohmann-json)
+  if(TARGET bound-qt)
+    list(APPEND bound_shipped_ports qtbase double-conversion libpng pcre2 zlib)
+  endif()
+  foreach(port ${bound_shipped_ports})
+    set(copyright "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/${port}/copyright")
+    if(EXISTS "${copyright}")
+      install(FILES "${copyright}" DESTINATION ${bound_install_doc}/licenses RENAME ${port}.txt)
+    endif()
+  endforeach()
 endif()

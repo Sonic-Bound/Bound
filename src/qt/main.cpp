@@ -3,16 +3,19 @@
 // wallet, payments, mining and the network.
 //   bound-qt [--mainnet | --testnet | --regtest] [--datadir <dir>]
 //            [the node options of `boundd node`: --connect, --port, --index, ...]
+//   bound-qt --version
 #include "app/datadir.h"
 #include "node/node.h"
 #include "qt/mainwindow.h"
 #include "qt/nodehost.h"
 #include "qt/style.h"
+#include "util/version.h"
 
 #include <QApplication>
 #include <QMessageBox>
 #include <QStringList>
 
+#include <cstdio>
 #include <exception>
 #include <filesystem>
 #include <optional>
@@ -25,6 +28,16 @@ int main(int argc, char** argv) {
     QApplication::setApplicationName(QStringLiteral("BOUND wallet"));
     QApplication::setOrganizationName(QStringLiteral("BOUND"));
     bound::gui::apply_style(app);
+    if (bound::asks_for_version(argc, argv)) {
+        const std::string text = bound::version_text("bound-qt");
+#ifdef _WIN32
+        // A windowed program on Windows has no console to print to.
+        QMessageBox::information(nullptr, QStringLiteral("BOUND wallet"), QString::fromStdString(text));
+#else
+        std::fputs(text.c_str(), stdout);
+#endif
+        return 0;
+    }
 
     // Qt has taken its own options (-style and so on) out already.
     std::vector<std::string> words;

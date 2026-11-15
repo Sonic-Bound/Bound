@@ -3,6 +3,7 @@
 #include "net/protocol.h"
 #include "net/socket.h"
 #include "util/bytes.h"
+#include "util/version.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +24,7 @@ struct CrawlerOptions {
     std::int64_t addr_wait = 10;       // after the handshake, for the reply to getaddr
     std::int64_t recheck = 30 * 60;    // a node that answered is tried again after this long
     bool allow_private = false;        // also probe and keep private and local addresses (tests, a LAN)
-    std::string user_agent = "/bound-seeder:0.9.0/";
+    std::string user_agent = bound::user_agent("bound-seeder");
     std::size_t max_nodes = 50'000;
 };
 

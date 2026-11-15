@@ -7,6 +7,7 @@
 #include "net/headerssync.h"
 #include "net/protocol.h"
 #include "net/socket.h"
+#include "util/version.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -28,7 +29,7 @@ inline constexpr PeerId kNoPeer = 0;  // never a real peer's id: "from this node
 
 struct PeerConfig {
     std::uint16_t listen_port = 0;  // announced in version; 0 means we take no connections
-    std::string user_agent = "/boundd:0.9.0/";
+    std::string user_agent = bound::user_agent("boundd");
     std::size_t max_headers = kMaxHeaders;  // per headers reply we send (tests use small batches)
     std::size_t max_blocks_in_flight = 16;  // per peer
     std::int64_t handshake_timeout = 60;    // seconds

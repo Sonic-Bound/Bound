@@ -16,6 +16,7 @@
 #include "seeder/dns_server.h"
 #include "util/serialize.h"
 #include "util/time.h"
+#include "util/version.h"
 
 #include <atomic>
 #include <csignal>
@@ -85,6 +86,10 @@ void save(const std::filesystem::path& file, const Bytes& data) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (bound::asks_for_version(argc, argv)) {
+        std::cout << bound::version_text("bound-seeder");
+        return 0;
+    }
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
         const Network network = take_network(args);  // milestone 10

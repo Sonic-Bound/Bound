@@ -12,6 +12,7 @@
 #include "rpc/client.h"
 #include "rpc/http.h"
 #include "util/time.h"
+#include "util/version.h"
 
 #include <atomic>
 #include <chrono>
@@ -63,6 +64,10 @@ std::uint16_t parse_port(std::string_view text) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (bound::asks_for_version(argc, argv)) {
+        std::cout << bound::version_text("bound-explorer");
+        return 0;
+    }
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
         const Network network = take_network(args);  // milestone 10

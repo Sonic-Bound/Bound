@@ -1,6 +1,5 @@
 {
   "name": "bound",
-  "version-string": "0.9.0",
   "dependencies": [
     "gtest",
     "leveldb",

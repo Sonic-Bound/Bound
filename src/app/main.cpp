@@ -40,6 +40,7 @@
 #include "node/node.h"
 #include "util/serialize.h"
 #include "util/time.h"
+#include "util/version.h"
 
 #include <atomic>
 #include <chrono>
@@ -273,6 +274,7 @@ int usage() {
                  "       boundd [network] [--datadir <dir>] balance <address>\n"
                  "       boundd [network] demo\n"
                  "       boundd [network] genesis [message] [unix-time]\n"
+                 "       boundd --version\n"
                  "The network is --testnet (the default until mainnet launches), --mainnet or --regtest.\n"
                  "The data directory defaults to "
               << default_datadir(g_network).string() << ". Talk to a running node with bound-cli.\n";
@@ -282,6 +284,10 @@ int usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (bound::asks_for_version(argc, argv)) {
+        std::cout << bound::version_text("boundd");
+        return 0;
+    }
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
         // The network and --datadir come first, in either order.

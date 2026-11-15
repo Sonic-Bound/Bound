@@ -1,0 +1,144 @@
+# Milestone 13: pushing a tag like v0.10.0 builds the release packages, tests them, attests where
+# they came from and drafts a GitHub release with them; a person reads the draft and publishes it.
+# See docs/release-process.md.
+#
+# Run by hand (Actions > Release > Run workflow) it's a dry run: the packages are built and kept as
+# the run's artifacts, and nothing is published.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: The tag, CMakeLists.txt and the release notes agree
+        run: |
+          version=$(sed -n 's/^project(bound VERSION \([0-9.]*\) .*/\1/p' CMakeLists.txt)
+          echo "CMakeLists.txt says $version"
+          [[ -n "$version" ]] || { echo "::error::no version in CMakeLists.txt"; exit 1; }
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::the tag is $GITHUB_REF_NAME but CMakeLists.txt says $version"
+            exit 1
+          fi
+          if [[ ! -f "docs/release-notes/v$version.md" ]]; then
+            echo "::error::docs/release-notes/v$version.md is missing"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows x64 package
+    needs: check
+    runs-on: windows-2022
+    # Qt comes from the cache CI keeps on main; without it vcpkg builds Qt, for about an hour.
+    timeout-minutes: 180
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - name: Restore the vcpkg package cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-windows-gui-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
+          restore-keys: vcpkg-windows-gui-
+      - name: Build, test and package
+        # Windows PowerShell 5.1, which the script is tested with.
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          powershell -NoProfile -ExecutionPolicy Bypass -File contrib\release\package-windows.ps1 -OutDir dist
+      - name: Save the vcpkg package cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-windows-gui-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86-64 package
+    needs: check
+    # The oldest glibc the programs will run on is the build machine's: 2.35 here, so Ubuntu 22.04,
+    # Debian 12 and anything newer.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GCC 13 (for std::format), Ninja, and the autotools vcpkg builds libsodium with
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y g++-13 ninja-build pkg-config autoconf automake libtool
+      - name: Build, test and package
+        env:
+          CC: gcc-13
+          CXX: g++-13
+          MAX_GLIBC: '2.35'
+        run: VCPKG_ROOT="$VCPKG_INSTALLATION_ROOT" bash contrib/release/package-linux.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Draft the GitHub release
+    needs: [check, windows, linux]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # to create the release
+      id-token: write      # to sign the attestations (Sigstore, through GitHub)
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum bound-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Attest that this workflow built them, from this tag
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/*'
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          # Until mainnet launches (1.0), releases are marked as pre-releases.
+          prerelease=""
+          if [[ "$VERSION" == 0.* ]]; then prerelease="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" dist/* --draft $prerelease --verify-tag \
+            --title "BOUND $VERSION" --notes-file "docs/release-notes/v$VERSION.md"

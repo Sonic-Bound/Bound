@@ -55,9 +55,18 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
 - **Infrastructure.** It comes with a DNS seeder (`bound-seeder`), a web block explorer
   (`bound-explorer`), JSON-RPC with `bound-cli`, and systemd units for servers.
 
+## Download
+
+Ready-made packages for Windows (the wallet app and the command-line programs) and Linux are on the
+[releases page](https://github.com/Sonic-Bound/Bound/releases). Unzip and run: nothing else to
+install. Each release lists the files' SHA-256 checksums, and GitHub attests that its own build
+servers made every file from the tagged source: check one with
+`gh attestation verify <file> --repo Sonic-Bound/Bound`. Releases are made the way
+[docs/release-process.md](docs/release-process.md) describes.
+
 ## Join the testnet
 
-Build it (below), then start the wallet app, or a node without a window:
+Download it (above) or build it (below), then start the wallet app, or a node without a window:
 
     bound-qt                 # the desktop wallet: a full node with a window
     boundd node              # or a node on its own; talk to it with bound-cli
@@ -167,7 +176,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 10 | Networks: mainnet, testnet and regtest side by side | ✅ [notes](docs/milestone-10.md) |
 | 11 | ASERT difficulty for mainnet, checked against Bitcoin Cash's test vectors | ✅ [notes](docs/milestone-11.md) |
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
-| 13–15 | Releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
+| 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
+| 14–15 | Launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout
 
@@ -186,7 +196,7 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
     src/app       boundd, bound-cli, bound-explorer, bound-seeder
     tests         GoogleTest suites, one per area
     docs          design notes for each milestone
-    contrib       systemd units for the node, the explorer and the seeder
+    contrib       systemd units for the node, the explorer and the seeder; release packaging
 
 ## License
 

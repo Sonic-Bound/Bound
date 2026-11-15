@@ -4,6 +4,7 @@
 #include "qt/format.h"
 #include "qt/session.h"
 #include "qt/style.h"
+#include "util/version.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -389,14 +390,15 @@ void show_about(QWidget* parent) {
     QMessageBox box(parent);
     box.setWindowTitle(QStringLiteral("About BOUND"));
     box.setIconPixmap(logo(72));
-    box.setText(QStringLiteral("<h3>BOUND wallet %1</h3>").arg(QStringLiteral(BOUND_VERSION)));
+    box.setText(QStringLiteral("<h3>BOUND wallet %1</h3>").arg(QString::fromStdString(std::string(version()))));
     box.setInformativeText(
         QStringLiteral("<p>A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, SHA-256d mining, "
                        "Ed25519 signatures. This app is a full node with a wallet, like Bitcoin-Qt.</p>"
                        "<p>Networks: mainnet (from launch day), testnet and regtest, whose coins have no value.</p>"
-                       "<p>MIT License. Built with Qt %1.<br>"
+                       "<p>MIT License. Built with Qt %1%2.<br>"
                        "<a href=\"https://github.com/Sonic-Bound/Bound\">github.com/Sonic-Bound/Bound</a></p>")
-            .arg(QString::fromLatin1(qVersion())));
+            .arg(QString::fromLatin1(qVersion()),
+                 build_commit().empty() ? QString() : QStringLiteral(" from commit %1").arg(QString::fromStdString(std::string(build_commit())))));
     box.setTextFormat(Qt::RichText);
     box.exec();
 }
