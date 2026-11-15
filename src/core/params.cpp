@@ -36,10 +36,12 @@ ConsensusParams make_testnet() {
     p.default_port = 18333;
     p.default_rpc_port = 18332;
 
-    // Milestone 8. Seeds: add the host names of the testnet's DNS seeders or always-on nodes
-    // here, e.g. "seed.example.org" (the default port is assumed; "host:port" names another).
-    // None yet: until there are, a first node is found with --seednode or --connect.
-    p.seeds = {};
+    // Milestone 8. Seeds: the host names (or addresses) of the testnet's DNS seeders and always-on
+    // nodes, e.g. "seed.example.org" (the default port is assumed; "host:port" names another).
+    // A node asks them when it knows too few peers; after that, peers come from address gossip.
+    p.seeds = {
+        "136.86.151.244",  // the first always-on node (a cloud server, static address)
+    };
     // Raise this to the public chain's work once there is one (see docs/hardening.md).
     p.minimum_chain_work = 0;
 

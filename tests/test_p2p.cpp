@@ -173,7 +173,7 @@ TEST_F(P2PTest, HandshakeCompletes) {
     ASSERT_EQ(b.peers.peers().size(), 1u);
     EXPECT_TRUE(b.peers.peers()[0].ready);
     EXPECT_TRUE(b.peers.peers()[0].inbound);
-    EXPECT_EQ(b.peers.peers()[0].user_agent, "/boundd:0.8.0/");
+    EXPECT_EQ(b.peers.peers()[0].user_agent, "/boundd:0.9.0/");
 }
 
 TEST_F(P2PTest, NewNodeSyncsTheWholeChain) {

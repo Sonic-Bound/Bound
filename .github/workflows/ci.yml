@@ -1,0 +1,26 @@
+# Builds BOUND on Linux and runs every test, including the wallet app's (drawn off screen).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config libsodium-dev libleveldb-dev \
+                                  libsnappy-dev nlohmann-json3-dev libgtest-dev qt6-base-dev qt6-qpa-plugins
+      - name: Configure
+        run: cmake --preset linux
+      - name: Build
+        run: cmake --build --preset linux-debug
+      - name: Test
+        run: ctest --preset linux-debug

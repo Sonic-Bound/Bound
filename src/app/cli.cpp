@@ -2,7 +2,7 @@
 //   bound-cli [--datadir <dir>] [--rpcport <port>] <method> [param]...
 // It reads the node's cookie from the data directory (the same default as boundd's), so it works
 // for whoever can read that directory. Parameters are passed as strings, except those the table
-// below marks as numbers or true/false. `bound-cli help` lists the methods.
+// in rpc/client.cpp marks as numbers or true/false. `bound-cli help` lists the methods.
 #include "app/datadir.h"
 #include "core/params.h"
 #include "rpc/client.h"
@@ -21,32 +21,6 @@
 namespace {
 
 using namespace bound;
-
-// The parameters that are JSON values rather than strings (Bitcoin's vRPCConvertParams).
-struct Convert {
-    std::string_view method;
-    std::size_t index;
-};
-constexpr Convert kConvert[] = {
-    {"getblockhash", 0},     {"getblock", 1},         {"getrawtransaction", 1}, {"getrawmempool", 0},
-    {"generatetoaddress", 0}, {"listtransactions", 0}, {"sendtoaddress", 2},     {"bumpfee", 1},
-    {"walletpassphrase", 1}, {"setban", 2},           {"gettxout", 1},          {"gettxout", 2},
-    {"getaddressdeltas", 1}, {"getaddressdeltas", 2}, {"getaddressutxos", 1},   {"getaddressutxos", 2},
-    {"getnetworkhashps", 0},
-};
-
-json param_value(std::string_view method, std::size_t index, const std::string& text) {
-    for (const Convert& c : kConvert) {
-        if (c.method != method || c.index != index) continue;
-        json value = json::parse(text, nullptr, false);
-        if (value.is_discarded() || !(value.is_number() || value.is_boolean() || value.is_null())) {
-            throw std::invalid_argument("parameter " + std::to_string(index + 1) + " of " + std::string(method) +
-                                        " must be a number or true/false, not " + text);
-        }
-        return value;
-    }
-    return text;
-}
 
 int usage() {
     std::cerr << "usage: bound-cli [--datadir <dir>] [--rpcport <port>] <method> [param]...\n"
@@ -76,7 +50,7 @@ int main(int argc, char** argv) {
 
         const std::string method(args[0]);
         json params = json::array();
-        for (std::size_t i = 1; i < args.size(); ++i) params.push_back(param_value(method, i - 1, std::string(args[i])));
+        for (std::size_t i = 1; i < args.size(); ++i) params.push_back(cli_param(method, i - 1, std::string(args[i])));
 
         // 15 minutes: generatetoaddress and restorewallet can take a while.
         RpcClient node(cookie_path(datadir), port, 900'000);

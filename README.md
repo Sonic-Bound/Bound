@@ -1,136 +1,175 @@
-# BOUND
+<p align="center">
+  <img src="docs/logo.svg" width="96" alt="BOUND logo">
+</p>
 
-A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, SHA-256d mining,
-Ed25519 signatures (libsodium), Base58Check addresses. It's a testnet-first learning project, not
-meant to hold real value.
+<h1 align="center">BOUND</h1>
+
+<p align="center">
+  A proof-of-work cryptocurrency written from scratch in C++20.<br>
+  UTXO ledger · SHA-256d mining · Ed25519 signatures · its own P2P network, wallet and desktop app.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Sonic-Bound/Bound/actions/workflows/ci.yml"><img src="https://github.com/Sonic-Bound/Bound/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/C%2B%2B-20-00599C.svg" alt="C++20">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg" alt="Windows and Linux">
+  <img src="https://img.shields.io/badge/network-testnet-orange.svg" alt="testnet">
+</p>
+
+> [!NOTE]
+> BOUND runs as a **testnet**: a learning project whose coins have no value.
+
+<p align="center">
+  <img src="docs/screenshots/wallet.png" width="780" alt="The BOUND wallet: balances, the network, recent transactions">
+</p>
+
+## What's inside
+
+Everything is written here, the way Bitcoin Core does it, rather than borrowed from another coin:
+
+- **Consensus.** Blocks and transactions are checked against every rule: double spends, Ed25519
+  signatures, amounts, the block reward, coinbase maturity and difficulty. The node follows the
+  valid chain with the most work and reorganises when another overtakes it.
+- **Network.** Nodes talk over TCP: headers-first sync, block and transaction relay, and address
+  gossip. A node finds its first peers through seeds, then advertises its own address so others can
+  find it, much like Bitcoin. [Home nodes](docs/home-node.md) need no server.
+- **Storage.** The chain lives in LevelDB and Bitcoin-style block files, and the node carries on
+  where it stopped, even after a crash.
+- **Payments.** They wait in each node's mempool until a block takes the best-paying ones. A
+  higher fee can replace one (full RBF).
+- **Wallet.** Every key comes from one seed, which is encrypted under a passphrase (Argon2id +
+  XChaCha20-Poly1305). It sends, receives and bumps fees.
+- **Desktop app.** `bound-qt` is a full node with a window, like Bitcoin-Qt. It has a wallet,
+  payments, mining at the press of a button, the peers and an RPC console.
+- **Defences.** A peer that breaks a rule is turned away for a day, and operators can ban
+  addresses. Floods of low-work headers, unrequested blocks, requests or addresses can't stall or
+  swamp a node.
+- **Infrastructure.** It comes with a DNS seeder (`bound-seeder`), a web block explorer
+  (`bound-explorer`), JSON-RPC with `bound-cli`, and systemd units for servers.
+
+## Join the testnet
+
+Build it (below), then start the wallet app, or a node without a window:
+
+    bound-qt                 # the desktop wallet: a full node with a window
+    boundd node              # or a node on its own; talk to it with bound-cli
+
+A new node finds the network on its own: it asks the built-in seed, then learns about other
+nodes from its peers. To mine, open **Mining** in the app and press *Start mining*, or start the
+node with `boundd node --mine <address>`.
+
+## Testnet parameters
+
+| | |
+|---|---|
+| Block time | 60 seconds |
+| Difficulty | retargets every 1,440 blocks (1 day), at most 4× each time |
+| Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) |
+| Supply | 20,999,999.727 BOUND in all (1 BOUND = 10<sup>8</sup> units) |
+| Maturity | mined coins can be spent after 100 blocks |
+| Blocks | at most 1 MB, timestamps at most 2 hours ahead |
+| Addresses | Base58Check, start with `9` |
+| Ports | P2P 18333, RPC 18332 (127.0.0.1 only) |
+| Relay policy | at least 1 unit per byte in fees, no outputs under 420 units, full RBF, at most 25 unconfirmed ancestors or descendants |
+
+Genesis `0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293`, message:
+*"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*.
+
+## Build
+
+<details open>
+<summary><b>Linux</b> (tested on Ubuntu 24.04 with GCC 13)</summary>
+
+    sudo apt install build-essential cmake ninja-build pkg-config libsodium-dev libleveldb-dev \
+                     libsnappy-dev nlohmann-json3-dev libgtest-dev qt6-base-dev qt6-qpa-plugins
+    cmake --preset linux
+    cmake --build --preset linux-release
+    ctest --preset linux-debug           # after cmake --build --preset linux-debug
+
+The programs land in `build/linux/Release`. Without Qt everything but `bound-qt` still builds; add
+`-DBOUND_GUI=OFF` to `cmake --preset linux` to skip it quietly. Servers can run the node, the
+explorer and the seeder as services: see [contrib/systemd](contrib/systemd).
+
+</details>
+
+<details open>
+<summary><b>Windows</b> (Visual Studio 2022)</summary>
+
+Install Visual Studio 2022 with *C++ CMake tools for Windows* and *vcpkg package manager*, then,
+from **Developer PowerShell for VS 2022**:
+
+    cmake --preset msvc                  # vcpkg builds the libraries the first time
+    cmake --build --preset release
+    ctest --preset debug                 # after cmake --build --preset debug
+
+The programs land in `build\msvc\Release`. The wallet app needs Qt, which vcpkg builds from source
+(one to two hours and a few GB of memory, once), so it's opt-in on Windows:
+`cmake --preset msvc -DBOUND_GUI=ON`. Close other heavy programs first; on a machine with 8 GB,
+`$env:VCPKG_MAX_CONCURRENCY = "4"` keeps the build from running out of memory.
+
+</details>
+
+## Using it
+
+While a node runs (`bound-qt` or `boundd node`), `bound-cli` talks to it over JSON-RPC.
+`bound-cli help` lists every method:
+
+    bound-cli createwallet "passphrase"     # prints the seed: write it down
+    bound-cli getnewaddress
+    bound-cli setmining true                # mine in the background (setmining false stops)
+    bound-cli walletpassphrase "passphrase" 600
+    bound-cli sendtoaddress <address> 1.5
+    bound-cli getwalletinfo
+    bound-cli getnetworkinfo                # peers, and whether others can reach you
+    bound-cli stop
+
+More of the node:
+
+    boundd node --connect <host[:port]>     # stay connected to a particular peer
+    boundd node --index                     # keep the indexes the explorer needs
+    boundd node --externalip <ip[:port]>    # where others reach you, if peers can't tell
+    bound-explorer                          # a block explorer for that node: http://127.0.0.1:8080
+    bound-seeder --host <seed name> --ns <this machine's name> --node <a node>
+    boundd demo                             # in memory: mine, pay, lose it to a reorg, get it back
+
+The chain is kept in `%APPDATA%\BOUND\testnet` on Windows and `~/.bound/testnet` on Linux, or
+wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `bound-explorer`.
 
 ## Roadmap
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Hashing, wire format, block header, proof of work, header chain | ✅ done ([notes](docs/milestone-1.md)) |
-| 2 | Keys, addresses, transactions, merkle tree, blocks, block reward | ✅ done ([notes](docs/milestone-2.md)) |
-| 3 | UTXO set, full validation, coinbase maturity, undo data, minimal wallet | ✅ done ([notes](docs/milestone-3.md)) |
-| 4 | Difficulty retargeting, block tree, most-work chain, reorgs | ✅ done ([notes](docs/milestone-4.md)) |
-| 5 | Storage: blocks and the UTXO set on disk, survive restarts | ✅ done ([notes](docs/milestone-5.md)) |
-| 6 | P2P networking: handshake, block relay, initial sync, address gossip | ✅ done ([notes](docs/milestone-6.md)) |
-| 7 | Mempool, transaction relay, wallet, command-line client / RPC | ✅ done ([notes](docs/milestone-7.md)) |
-| 7½ | Hardening: discouragement, bans, headers presync | ✅ done ([notes](docs/hardening.md)) |
-| 8 | Public testnet: seeds and a DNS seeder, block explorer, Linux, a node among strangers | ✅ done ([notes](docs/milestone-8.md)) |
-
-All eight are done. Going public now takes machines rather than code: the launch checklist is in
-[docs/milestone-8.md](docs/milestone-8.md#launching-the-public-testnet).
-
-**What it can do today:**
-- **Network:** nodes talk to each other over TCP. A node syncs the chain from its peers, relays
-  blocks and transactions, finds other nodes through address gossip, and can mine while it runs.
-- **Storage:** it keeps its chain on disk and carries on where it stopped, even after a crash.
-- **Consensus:** every rule is enforced: double spends, signatures, amounts, reward, maturity and
-  difficulty. The node follows the valid branch with the most work, reorganising when another
-  overtakes it.
-- **Payments:** they wait in each node's mempool until a block takes the best-paying ones, and can
-  be replaced by a higher fee.
-- **Wallet:** every key comes from one seed, kept encrypted under a passphrase. It sends, receives
-  and bumps fees through `bound-cli`, which talks JSON-RPC to the running node.
-- **Defences:** a peer that breaks a rule is turned away for a day, and operators can ban
-  addresses. Headers of a chain with too little work are checked twice before any is stored, so a
-  flood of cheap headers can't fill the disk. Withheld blocks, unrequested blocks and floods of
-  requests or addresses can't stall or swamp a node.
-- **Going public:** a node finds the network through seed names. `bound-seeder` is a DNS seeder
-  for them, and `bound-explorer` is a block explorer for the web. Everything builds and runs on
-  Linux as well as Windows, with systemd units for servers.
-- **Home nodes:** like Bitcoin, no server is required. A node that takes connections tells its
-  peers where to reach it, and the network passes that on; see
-  [docs/home-node.md](docs/home-node.md) for port forwarding and becoming a seed.
-
-## Testnet parameters
-
-60-second blocks · difficulty retargets every 1,440 blocks (1 day), at most 4× each time ·
-timestamps at most 2 hours ahead · 5 BOUND reward halving every 2,100,000 blocks (~4 years) ·
-total supply 20,999,999.727 BOUND · coinbase maturity 100 blocks · max block 1 MB · addresses
-start with `9` · P2P port 18333, RPC port 18332 (127.0.0.1 only).
-
-Relay policy, not consensus: at least 1 unit per byte in fees · no outputs under 420 units ·
-full replace-by-fee · at most 25 unconfirmed ancestors or descendants.
-
-Genesis `0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293`, message:
-*"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*.
-
-## Build and run
-
-**Linux** (tested on Ubuntu 24.04 with GCC 13):
-
-    sudo apt install build-essential cmake ninja-build pkg-config \
-                     libsodium-dev libleveldb-dev libsnappy-dev nlohmann-json3-dev libgtest-dev
-    cmake --preset linux
-    cmake --build --preset linux-release
-    build/linux/Release/bound_tests
-
-The programs are in `build/linux/Release`; the commands below work the same without `.exe`. To
-run them as services, see [contrib/systemd](contrib/systemd).
-
-**Windows** needs Visual Studio 2022 with *C++ CMake tools for Windows* and *vcpkg package
-manager*. From **Developer PowerShell for VS 2022**:
-
-    cmake --preset msvc                  # first run builds gtest, libsodium, leveldb, nlohmann-json via vcpkg
-    cmake --build --preset release
-    ctest --preset debug                 # or build\msvc\Release\bound_tests.exe
-    build\msvc\Release\boundd.exe demo   # in memory: mine, pay through the mempool, lose it to a
-                                         # reorg, see the mempool put it back
-    build\msvc\Release\boundd.exe node   # join the network (port 18333), RPC on 127.0.0.1:18332
-    build\msvc\Release\boundd.exe node --connect <host[:port]> --mine <address>
-    build\msvc\Release\boundd.exe node --seednode <host[:port]> --index   # find peers through a seed;
-                                                                          # keep the explorer's indexes
-    build\msvc\Release\boundd.exe node --externalip <ip[:port]>   # where others reach you, if peers can't tell
-    build\msvc\Release\bound-explorer.exe        # a block explorer for that node: http://127.0.0.1:8080
-    build\msvc\Release\bound-seeder.exe --host <seed name> --ns <this machine's name> --node <a node>
-                                                 # a DNS seeder (see docs/milestone-8.md)
-
-While a node runs, talk to it with `bound-cli` (`bound-cli help` lists everything):
-
-    build\msvc\Release\bound-cli.exe createwallet "passphrase"   # prints the seed: write it down
-    build\msvc\Release\bound-cli.exe getnewaddress
-    build\msvc\Release\bound-cli.exe generatetoaddress 101 <address>
-    build\msvc\Release\bound-cli.exe walletpassphrase "passphrase" 600
-    build\msvc\Release\bound-cli.exe sendtoaddress <address> 1.5
-    build\msvc\Release\bound-cli.exe getwalletinfo
-    build\msvc\Release\bound-cli.exe setban 203.0.113.7 add 3600   # listbanned, clearbanned
-    build\msvc\Release\bound-cli.exe getaddressbalance <address>   # with --index: any address
-    build\msvc\Release\bound-cli.exe getrawtransaction <txid> 2    # with --index: any transaction
-    build\msvc\Release\bound-cli.exe stop
-
-Offline, on a data directory no node is using:
-
-    build\msvc\Release\boundd.exe mine 10 <address>   # on the stored chain; run again to continue
-    build\msvc\Release\boundd.exe info
-    build\msvc\Release\boundd.exe balance <address>
-    build\msvc\Release\boundd.exe --datadir $env:TEMP\bound-retarget mine 2885
-                                         # a fresh chain, ~6 min: difficulty 1 at #1440, 4x at #2880
-    build\msvc\Release\boundd.exe genesis "message" 1793491200
-
-(`ctest --preset debug` needs a debug build first: `cmake --build --preset debug`.)
-
-The chain is stored in `%APPDATA%\BOUND\testnet` (`~/.bound/testnet` on Linux), or wherever
-`--datadir` points; give `bound-cli` and `bound-explorer` the same one. The wallet lives in its
-`wallet` folder, the indexes in `index`.
+| 1 | Hashing, wire format, block header, proof of work, header chain | ✅ [notes](docs/milestone-1.md) |
+| 2 | Keys, addresses, transactions, merkle tree, blocks, block reward | ✅ [notes](docs/milestone-2.md) |
+| 3 | UTXO set, full validation, coinbase maturity, undo data, minimal wallet | ✅ [notes](docs/milestone-3.md) |
+| 4 | Difficulty retargeting, block tree, most-work chain, reorgs | ✅ [notes](docs/milestone-4.md) |
+| 5 | Storage: blocks and the UTXO set on disk, survive restarts | ✅ [notes](docs/milestone-5.md) |
+| 6 | P2P networking: handshake, block relay, initial sync, address gossip | ✅ [notes](docs/milestone-6.md) |
+| 7 | Mempool, transaction relay, wallet, command-line client / RPC | ✅ [notes](docs/milestone-7.md) |
+| 7½ | Hardening: discouragement, bans, headers presync | ✅ [notes](docs/hardening.md) |
+| 8 | Public testnet: seeds and a DNS seeder, block explorer, Linux, home nodes | ✅ [notes](docs/milestone-8.md) |
+| 9 | Desktop wallet (`bound-qt`), background mining by RPC | ✅ [notes](docs/milestone-9.md) |
 
 ## Layout
 
-    src/util     hex, serialization, Base58
-    src/crypto   SHA-256, Ed25519 (libsodium wrappers)
-    src/core     consensus: uint256, arith_uint256, pow, block, transaction, merkle,
-                 params, chain (block tree), coins, validation, miner, wallet (single-key helpers);
-                 storage: storage (interfaces, block files), leveldb_store, chaindb;
-                 policy: mempool, amount
-    src/net      P2P: socket (raw OS sockets, TCP and UDP), protocol, addrman, peerman, connman,
-                 banman (discouragement, bans), headerssync (headers presync), seeds
-    src/wallet   crypter (passphrase encryption), wallet (seed-derived keys, history, payments)
-    src/rpc      http (server and client), server (JSON-RPC, cookie auth), methods, client
-    src/index    chainindex: transactions, spent outputs, addresses (--index)
-    src/explorer the block explorer's pages
-    src/seeder   the DNS seeder: crawler, dns, dns_server
-    src/app      boundd, bound-cli, bound-explorer, bound-seeder
-    tests        GoogleTest suites, one per area
-    docs         per-milestone design notes
-    contrib      systemd units for the node, the explorer and the seeder
-    triplets     vcpkg triplet: build packages with the developer shell's MSVC version
+    src/util      hex, serialization, Base58
+    src/crypto    SHA-256, Ed25519 (libsodium wrappers)
+    src/core      consensus: uint256, pow, block, transaction, merkle, params, chain, coins,
+                  validation, miner; storage: LevelDB, block files; policy: mempool, amounts
+    src/net       P2P: sockets, protocol, addrman, peerman, connman, banman, headerssync, seeds
+    src/wallet    passphrase encryption, the seed-derived wallet
+    src/rpc       HTTP, JSON-RPC server and client, the methods
+    src/node      the node itself, shared by boundd and bound-qt
+    src/index     transaction, spent-output and address indexes (--index)
+    src/explorer  the block explorer's pages
+    src/seeder    the DNS seeder: crawler and DNS server
+    src/qt        the desktop wallet
+    src/app       boundd, bound-cli, bound-explorer, bound-seeder
+    tests         GoogleTest suites, one per area
+    docs          design notes for each milestone
+    contrib       systemd units for the node, the explorer and the seeder
+
+## License
+
+MIT: see [LICENSE](LICENSE).

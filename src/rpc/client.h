@@ -5,8 +5,20 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace bound {
+
+// bound-cli's rule for turning the words of a command into parameters (Bitcoin's
+// vRPCConvertParams): strings, except those a table marks as numbers or true/false. Throws
+// std::invalid_argument when one of those isn't.
+json cli_param(std::string_view method, std::size_t index, const std::string& text);
+
+// Milestone 9, for the wallet app's console: a line split into words at spaces. Double quotes keep
+// spaces inside one word ("a b"), and a backslash keeps the next quote or backslash as it is.
+// Throws std::invalid_argument for a quote left open.
+std::vector<std::string> split_words(std::string_view line);
 
 // Milestone 8: the calling side of JSON-RPC, for bound-cli and the explorer. Talks to a node on
 // this machine (127.0.0.1) and proves it may with the node's cookie file.

@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
-project(bound VERSION 0.1.0 LANGUAGES CXX)
+
+# Milestone 9: the desktop wallet, bound-qt, needs Qt 6.
+# - On Linux it's the system's package (qt6-base-dev on Debian or Ubuntu), so it's on by default.
+#   Without Qt, everything else still builds.
+# - On Windows vcpkg has to build Qt (the "gui" feature in vcpkg.json): one to two hours and several
+#   GB of memory the first time. So it's off unless asked for: cmake --preset msvc -DBOUND_GUI=ON.
+if(CMAKE_HOST_WIN32)
+  set(bound_gui_default OFF)
+else()
+  set(bound_gui_default ON)
+endif()
+option(BOUND_GUI "Build the desktop wallet (bound-qt), with Qt 6" ${bound_gui_default})
+if(BOUND_GUI)
+  list(APPEND VCPKG_MANIFEST_FEATURES "gui")
+endif()
+
+project(bound VERSION 0.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -82,6 +98,8 @@ add_library(bound_core STATIC
   src/seeder/dns.cpp
   src/seeder/dns_server.cpp
   src/seeder/crawler.cpp
+  # milestone 9
+  src/node/node.cpp
 )
 target_include_directories(bound_core PUBLIC src)
 target_link_libraries(bound_core PUBLIC unofficial-sodium::sodium nlohmann_json::nlohmann_json Threads::Threads PRIVATE leveldb::leveldb)
@@ -152,3 +170,56 @@ target_link_libraries(bound_tests PRIVATE bound_core GTest::gtest GTest::gtest_m
 
 include(GoogleTest)
 gtest_discover_tests(bound_tests DISCOVERY_MODE PRE_TEST)
+
+# Milestone 9: bound-qt, the desktop wallet. Everything but main() is in bound_gui, for its tests.
+if(BOUND_GUI)
+  find_package(Qt6 6.4 COMPONENTS Widgets)
+  if(NOT Qt6_FOUND)
+    message(WARNING "Qt 6 not found, so bound-qt won't be built. On Debian or Ubuntu: sudo apt install "
+                    "qt6-base-dev. Or configure with -DBOUND_GUI=OFF to stop this warning.")
+  endif()
+endif()
+if(BOUND_GUI AND Qt6_FOUND)
+  add_library(bound_gui STATIC
+    src/qt/rpc.cpp
+    src/qt/nodehost.cpp
+    src/qt/style.cpp
+    src/qt/format.cpp
+    src/qt/session.cpp
+    src/qt/dialogs.cpp
+    src/qt/overview.cpp
+    src/qt/send.cpp
+    src/qt/receive.cpp
+    src/qt/transactions.cpp
+    src/qt/mining.cpp
+    src/qt/network.cpp
+    src/qt/console.cpp
+    src/qt/mainwindow.cpp
+  )
+  set_target_properties(bound_gui PROPERTIES AUTOMOC ON)
+  target_link_libraries(bound_gui PUBLIC bound_core Qt6::Widgets)
+  target_compile_definitions(bound_gui PRIVATE BOUND_VERSION="${PROJECT_VERSION}")
+
+  add_executable(bound-qt WIN32 src/qt/main.cpp)
+  target_link_libraries(bound-qt PRIVATE bound_gui)
+
+  add_executable(bound_qt_tests tests/test_qt.cpp)
+  target_link_libraries(bound_qt_tests PRIVATE bound_gui GTest::gtest)
+  gtest_discover_tests(bound_qt_tests DISCOVERY_MODE PRE_TEST PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+
+  # On Windows Qt looks for its platform plugin in platforms\ beside the program (vcpkg copies the
+  # DLLs, not the plugins). The tests draw off screen.
+  if(WIN32)
+    set(bound_qt_plugins Qt6::QWindowsIntegrationPlugin)
+    if(TARGET Qt6::QOffscreenIntegrationPlugin)
+      list(APPEND bound_qt_plugins Qt6::QOffscreenIntegrationPlugin)
+    endif()
+    foreach(target bound-qt bound_qt_tests)
+      foreach(plugin ${bound_qt_plugins})
+        add_custom_command(TARGET ${target} POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/platforms"
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:${plugin}>" "$<TARGET_FILE_DIR:${target}>/platforms/")
+      endforeach()
+    endforeach()
+  endif()
+endif()

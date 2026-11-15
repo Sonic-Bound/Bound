@@ -145,9 +145,22 @@ json summary_to_json(const WalletTxSummary& s, const Wallet& wallet, const Conse
         {"time", s.time},
     };
     if (s.from_me) j["fee"] = format_coins(s.fee);
-    if (const WalletTx* w = wallet.find(s.txid); w != nullptr && s.confirmations > 0) {
-        j["blockhash"] = w->block.to_hex();
-        j["blockheight"] = w->height;
+    if (const WalletTx* w = wallet.find(s.txid); w != nullptr) {
+        if (s.confirmations > 0) {
+            j["blockhash"] = w->block.to_hex();
+            j["blockheight"] = w->height;
+        }
+        // Milestone 9, for the wallet app: who it went to. For a payment we made, the first output
+        // that isn't ours (our own address if all are); for one we received, the first that is.
+        const TxOut* shown = nullptr;
+        for (const TxOut& out : w->tx.outputs) {
+            if (wallet.is_mine(out.recipient) != s.from_me) {
+                shown = &out;
+                break;
+            }
+        }
+        if (shown == nullptr && !w->tx.outputs.empty()) shown = &w->tx.outputs.front();
+        if (shown != nullptr) j["address"] = address_of(shown->recipient, params);
     }
     return j;
 }
@@ -320,6 +333,7 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
             {"blocks", tip.height},
             {"headers", c.best_header().height},
             {"bestblockhash", tip.hash.to_hex()},
+            {"time", tip.header.time},  // the tip's timestamp
             {"difficulty", difficulty(tip.header.bits, c.params())},
             {"mediantime", tip.median_time_past(c.params().median_time_span)},
             {"chainwork", tip.chain_work.to_uint256().to_hex()},
@@ -634,6 +648,44 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
                   hashes.push_back(block.hash().to_hex());
               }
               return hashes;
+          });
+    // Milestone 9: mining in the background, without blocking the node, switched on and off at will.
+    const auto mining_info = [&node] {
+        const ConsensusParams& params = node.chain.params();
+        const MiningControl* m = node.mining;
+        const bool on = m != nullptr && m->payee.has_value();
+        return json{
+            {"mining", on},
+            {"status", !on ? "off" : m->paused ? "waiting for the initial sync" : "mining"},
+            {"address", on ? json(address_of(*m->payee, params)) : json(nullptr)},
+            {"hashespersec", on ? m->hashes_per_second : 0.0},
+            {"blocksfound", m != nullptr ? m->blocks_found : 0},
+            {"blocks", node.chain.height()},
+            {"difficulty", difficulty(next_work_required(node.chain.tip(), params), params)},
+            {"pooledtx", node.mempool.size()},
+        };
+    };
+    t.add("getmininginfo", "", "Whether this node mines in the background (setmining), how fast, and the next block's difficulty.", 0, 0,
+          [mining_info](const RpcParams&) -> json { return mining_info(); });
+    t.add("setmining", "<true|false> [address]",
+          "Starts mining in the background, paying the address (by default a new one from the wallet), or stops. The node "
+          "keeps working meanwhile; mined blocks are announced like any other.",
+          1, 2, [&node, mining_info](const RpcParams& p) -> json {
+              if (node.mining == nullptr) throw RpcError(rpc_error::kMisc, "background mining isn't available here");
+              if (!p.boolean(0)) {
+                  node.mining->payee.reset();
+                  return mining_info();
+              }
+              if (p.has(1)) {
+                  node.mining->payee = parse_address(p.str(1), node.chain.params());
+              } else {
+                  try {
+                      node.mining->payee = need_wallet(node).new_address();
+                  } catch (const WalletError& e) {
+                      throw RpcError(code_for(e.kind), e.what());
+                  }
+              }
+              return mining_info();
           });
 
     // Utility.

@@ -11,6 +11,63 @@
 
 namespace bound {
 
+namespace {
+
+// The parameters that are JSON values rather than strings.
+struct Convert {
+    std::string_view method;
+    std::size_t index;
+};
+constexpr Convert kConvert[] = {
+    {"getblockhash", 0},     {"getblock", 1},         {"getrawtransaction", 1}, {"getrawmempool", 0},
+    {"generatetoaddress", 0}, {"listtransactions", 0}, {"sendtoaddress", 2},     {"bumpfee", 1},
+    {"walletpassphrase", 1}, {"setban", 2},           {"gettxout", 1},          {"gettxout", 2},
+    {"getaddressdeltas", 1}, {"getaddressdeltas", 2}, {"getaddressutxos", 1},   {"getaddressutxos", 2},
+    {"getnetworkhashps", 0}, {"setmining", 0},
+};
+
+}  // namespace
+
+json cli_param(std::string_view method, std::size_t index, const std::string& text) {
+    for (const Convert& c : kConvert) {
+        if (c.method != method || c.index != index) continue;
+        json value = json::parse(text, nullptr, false);
+        if (value.is_discarded() || !(value.is_number() || value.is_boolean() || value.is_null())) {
+            throw std::invalid_argument("parameter " + std::to_string(index + 1) + " of " + std::string(method) +
+                                        " must be a number or true/false, not " + text);
+        }
+        return value;
+    }
+    return text;
+}
+
+std::vector<std::string> split_words(std::string_view line) {
+    std::vector<std::string> words;
+    std::string word;
+    bool in_word = false;
+    bool quoted = false;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char c = line[i];
+        if (c == '\\' && i + 1 < line.size() && (line[i + 1] == '"' || line[i + 1] == '\\')) {
+            word += line[++i];
+            in_word = true;
+        } else if (c == '"') {
+            quoted = !quoted;
+            in_word = true;  // "" is an empty word
+        } else if ((c == ' ' || c == '\t') && !quoted) {
+            if (in_word) words.push_back(std::move(word));
+            word.clear();
+            in_word = false;
+        } else {
+            word += c;
+            in_word = true;
+        }
+    }
+    if (quoted) throw std::invalid_argument("a quote is left open");
+    if (in_word) words.push_back(std::move(word));
+    return words;
+}
+
 RpcClient::RpcClient(std::filesystem::path cookie_file, std::uint16_t port, int timeout_ms)
     : cookie_file_(std::move(cookie_file)), port_(port), timeout_ms_(timeout_ms) {}
 

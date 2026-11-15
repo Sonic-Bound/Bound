@@ -11,9 +11,19 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace bound {
+
+// Milestone 9: mining in the background while the node runs. setmining sets the payee, and the
+// node's loop does the rest and reports back here (getmininginfo reads it).
+struct MiningControl {
+    std::optional<PublicKey> payee;  // mining while set
+    bool paused = false;             // waiting out the initial sync
+    double hashes_per_second = 0;    // over the last few seconds
+    std::uint64_t blocks_found = 0;  // since the node started
+};
 
 // Milestone 7: what the RPC methods work on, all owned by the thread that runs the node. (Every
 // member past the references has a default, so designated initializers may leave any out.)
@@ -37,6 +47,8 @@ struct NodeContext {
     // Milestone 8: the transaction and address indexes, when the node keeps them (--index). With
     // them getrawtransaction finds any confirmed transaction and the getaddress* methods work.
     ChainIndex* index = nullptr;
+    // Milestone 9: background mining (setmining, getmininginfo); null: not available.
+    MiningControl* mining = nullptr;
 };
 
 // The node's methods: blockchain, mempool, network, mining, wallet, control.

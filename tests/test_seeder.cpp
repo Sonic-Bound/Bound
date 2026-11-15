@@ -292,7 +292,7 @@ TEST(Seeder, CrawlsANodeAndServesIt) {
     const NodeRecord* record = crawler.find(node);
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->height, 12);
-    EXPECT_EQ(record->user_agent, "/boundd:0.8.0/");
+    EXPECT_EQ(record->user_agent, "/boundd:0.9.0/");
     EXPECT_EQ(record->successes, 1u);
     EXPECT_NE(crawler.find(elsewhere), nullptr);  // learned from its getaddr reply
 

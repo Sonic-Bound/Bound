@@ -491,3 +491,62 @@ TEST_F(NodeRpcTest, AWholeRoundTrip) {
     EXPECT_EQ(restored["result"]["transactions"], 103);
     EXPECT_EQ(call("getwalletinfo")["txcount"], 104);
 }
+
+// Milestone 9: mining in the background, switched by RPC (the node's loop does the mining and
+// reports back through MiningControl).
+TEST_F(NodeRpcTest, MiningSwitchedOnAndOff) {
+    EXPECT_EQ(call("getmininginfo")["mining"], false);
+    EXPECT_EQ(call("getmininginfo")["status"], "off");
+    EXPECT_EQ(error_code("setmining", json::array({true})), rpc_error::kMisc);  // not available here
+
+    MiningControl mining;
+    node.mining = &mining;
+    EXPECT_EQ(error_code("setmining", json::array({true})), rpc_error::kNoWallet);  // nobody to pay
+    EXPECT_EQ(error_code("setmining", json::array({true, "9notanaddress"})), rpc_error::kInvalidAddressOrKey);
+    EXPECT_EQ(error_code("setmining", json::array({"yes"})), rpc_error::kType);
+    EXPECT_FALSE(mining.payee.has_value());
+
+    const std::string carol = encode_address(test_key("carol").public_key(), params.address_version);
+    const json on = call("setmining", json::array({true, carol}));
+    EXPECT_EQ(on["mining"], true);
+    EXPECT_EQ(on["status"], "mining");
+    EXPECT_EQ(on["address"], carol);
+    EXPECT_EQ(mining.payee, test_key("carol").public_key());
+
+    mining.paused = true;
+    mining.hashes_per_second = 1500;
+    mining.blocks_found = 2;
+    const json info = call("getmininginfo");
+    EXPECT_EQ(info["status"], "waiting for the initial sync");
+    EXPECT_EQ(info["hashespersec"], 1500.0);
+    EXPECT_EQ(info["blocksfound"], 2);
+    EXPECT_EQ(info["blocks"], 0);
+
+    EXPECT_EQ(call("setmining", json::array({false}))["mining"], false);
+    EXPECT_FALSE(mining.payee.has_value());
+
+    // With a wallet and no address, a new address of the wallet's.
+    call("createwallet", {"secret"});
+    const json mine = call("setmining", json::array({true}));
+    // json::array: a lone json value in braces is a copy of it on MSVC, not a one-element list.
+    EXPECT_EQ(call("validateaddress", json::array({mine["address"]}))["ismine"], true);
+}
+
+// Milestone 9, for the wallet app: listtransactions says who each payment went to or came from.
+TEST_F(NodeRpcTest, TransactionsShowTheirAddress) {
+    call("createwallet", {"secret"});
+    const std::string mine_to = call("getnewaddress");
+    call("generatetoaddress", {101, mine_to});
+    const json coinbase = call("listtransactions", {1})[0];
+    EXPECT_EQ(coinbase["category"], "immature");
+    EXPECT_EQ(coinbase["address"], mine_to);
+
+    const std::string bob = encode_address(test_key("bob").public_key(), params.address_version);
+    call("walletpassphrase", {"secret", 60});
+    const std::string txid = call("sendtoaddress", {bob, "1.5"});
+    const json sent = call("listtransactions", {1})[0];
+    EXPECT_EQ(sent["txid"], txid);
+    EXPECT_EQ(sent["category"], "send");
+    EXPECT_EQ(sent["address"], bob);  // not the change, which comes back to us
+    EXPECT_EQ(call("gettransaction", json::array({txid}))["address"], bob);
+}
