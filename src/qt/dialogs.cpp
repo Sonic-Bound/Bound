@@ -140,10 +140,18 @@ void offer_wallet(Session& session, QWidget* parent) {
     box.setWindowTitle(QStringLiteral("Welcome to BOUND"));
     box.setIconPixmap(logo(64));
     box.setText(QStringLiteral("<b>You don't have a wallet yet.</b>"));
-    box.setInformativeText(
-        QStringLiteral("A wallet holds the keys to your coins. It lives in this app's data folder, encrypted with a "
-                       "passphrase, and all of its keys come from one seed you write down.\n\nThis is the testnet: its "
-                       "coins have no value, so it's the place to try things."));
+    const ConsensusParams& p = session.params();
+    QString network_note;
+    if (p.network_name != "mainnet") {
+        network_note = QStringLiteral("\n\nThis is the %1: its coins have no value, so it's the place to try things.").arg(session.network_name());
+    } else if (!p.launched) {
+        network_note = QStringLiteral("\n\nMainnet hasn't launched: this chain is a preview, and its coins will be thrown away.");
+    } else {
+        network_note = QStringLiteral("\n\nThis is mainnet: keep the seed safe, it's the only way back to your coins.");
+    }
+    box.setInformativeText(QStringLiteral("A wallet holds the keys to your coins. It lives in this app's data folder, encrypted "
+                                          "with a passphrase, and all of its keys come from one seed you write down.") +
+                           network_note);
     QPushButton* create = box.addButton(QStringLiteral("Create a new wallet"), QMessageBox::AcceptRole);
     create->setObjectName(QStringLiteral("primary"));
     QPushButton* restore = box.addButton(QStringLiteral("Restore from a seed"), QMessageBox::ActionRole);
@@ -385,7 +393,7 @@ void show_about(QWidget* parent) {
     box.setInformativeText(
         QStringLiteral("<p>A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, SHA-256d mining, "
                        "Ed25519 signatures. This app is a full node with a wallet, like Bitcoin-Qt.</p>"
-                       "<p><b>Testnet:</b> these coins have no value.</p>"
+                       "<p>Networks: mainnet (from launch day), testnet and regtest, whose coins have no value.</p>"
                        "<p>MIT License. Built with Qt %1.<br>"
                        "<a href=\"https://github.com/Sonic-Bound/Bound\">github.com/Sonic-Bound/Bound</a></p>")
             .arg(QString::fromLatin1(qVersion())));

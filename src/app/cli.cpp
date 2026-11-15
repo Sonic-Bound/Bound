@@ -1,5 +1,5 @@
 // bound-cli: talks to a running boundd over JSON-RPC, like bitcoin-cli.
-//   bound-cli [--datadir <dir>] [--rpcport <port>] <method> [param]...
+//   bound-cli [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>] <method> [param]...
 // It reads the node's cookie from the data directory (the same default as boundd's), so it works
 // for whoever can read that directory. Parameters are passed as strings, except those the table
 // in rpc/client.cpp marks as numbers or true/false. `bound-cli help` lists the methods.
@@ -23,21 +23,26 @@ namespace {
 using namespace bound;
 
 int usage() {
-    std::cerr << "usage: bound-cli [--datadir <dir>] [--rpcport <port>] <method> [param]...\n"
+    std::cerr << "usage: bound-cli [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>] <method> [param]...\n"
                  "       bound-cli help             lists the methods\n"
                  "       bound-cli help <method>    explains one\n"
-                 "The data directory defaults to "
-              << default_datadir().string() << ".\n";
+                 "The network's node is asked (testnet by default); its data directory defaults to "
+              << default_datadir().string() << " for testnet.\n";
     return 2;
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::uint16_t port = testnet_params().default_rpc_port;
+    std::uint16_t port = 0;
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
-        std::filesystem::path datadir = default_datadir();
+        // The options come before the method: the network first among them (milestone 10).
+        std::size_t options = 0;
+        while (options < args.size() && args[options].starts_with("--")) options += network_flag(args[options]) ? 1 : 2;
+        const Network network = take_network(args, options);
+        port = params_for(network).default_rpc_port;
+        std::filesystem::path datadir = default_datadir(network);
         while (args.size() >= 2 && (args[0] == "--datadir" || args[0] == "--rpcport")) {
             if (args[0] == "--datadir") {
                 datadir = std::filesystem::path(args[1]);

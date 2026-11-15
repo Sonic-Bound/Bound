@@ -27,7 +27,18 @@ namespace {
 
 constexpr int kRefreshMs = 2000;
 
-QWidget* brand(QWidget* parent) {
+// Milestone 10: which network, under the name. Mainnet's is green once it has launched; before
+// that it's a preview whose coins will be thrown away, and says so in red.
+QLabel* network_pill(const ConsensusParams& p, QWidget* parent) {
+    const QString name = QString::fromUtf8(p.network_name.data(), static_cast<qsizetype>(p.network_name.size())).toUpper();
+    auto* pill = new QLabel(p.launched ? name : name + QStringLiteral(" PREVIEW"), parent);
+    pill->setObjectName(QStringLiteral("pill"));
+    if (p.network_name == "mainnet") pill->setStyleSheet(p.launched ? QStringLiteral("background: #2b8a3e;") : QStringLiteral("background: #c92a2a;"));
+    pill->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    return pill;
+}
+
+QWidget* brand(const ConsensusParams& params, QWidget* parent) {
     auto* box = new QWidget(parent);
     box->setObjectName(QStringLiteral("brand"));
     auto* layout = new QHBoxLayout(box);
@@ -40,11 +51,8 @@ QWidget* brand(QWidget* parent) {
     text->setSpacing(2);
     auto* name = new QLabel(QStringLiteral("BOUND"), box);
     name->setObjectName(QStringLiteral("brandName"));
-    auto* pill = new QLabel(QStringLiteral("TESTNET"), box);
-    pill->setObjectName(QStringLiteral("pill"));
-    pill->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     text->addWidget(name);
-    text->addWidget(pill);
+    text->addWidget(network_pill(params, box));
     layout->addLayout(text);
     layout->addStretch();
     return box;
@@ -54,7 +62,7 @@ QWidget* brand(QWidget* parent) {
 
 MainWindow::MainWindow(NodeHost& host, QWidget* parent)
     : QMainWindow(parent), host_(host), rpc_(cookie_path(host.datadir()), host.rpc_port()), session_(rpc_, host_) {
-    setWindowTitle(QStringLiteral("BOUND wallet (testnet)"));
+    setWindowTitle(QStringLiteral("BOUND wallet (%1)").arg(session_.network_name()));
     resize(1080, 700);
     setMinimumSize(900, 600);
 
@@ -69,7 +77,7 @@ MainWindow::MainWindow(NodeHost& host, QWidget* parent)
     auto* side_layout = new QVBoxLayout(side);
     side_layout->setContentsMargins(0, 0, 0, 0);
     side_layout->setSpacing(0);
-    side_layout->addWidget(brand(side));
+    side_layout->addWidget(brand(session_.params(), side));
     sidebar_ = new QListWidget(side);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
     sidebar_->addItems({QStringLiteral("Overview"), QStringLiteral("Send"), QStringLiteral("Receive"), QStringLiteral("Transactions"),

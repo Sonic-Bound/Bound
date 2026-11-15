@@ -165,6 +165,8 @@ add_executable(bound_tests
   tests/test_index.cpp
   tests/test_explorer.cpp
   tests/test_seeder.cpp
+  # milestone 10
+  tests/test_networks.cpp
 )
 target_link_libraries(bound_tests PRIVATE bound_core GTest::gtest GTest::gtest_main)
 

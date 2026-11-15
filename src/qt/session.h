@@ -3,6 +3,7 @@
 // What every page of the wallet app shares: the connection to the node, the wallet's state as
 // last seen, and unlocking the wallet for a moment to spend.
 
+#include "core/params.h"
 #include "qt/rpc.h"
 
 #include <QObject>
@@ -25,6 +26,9 @@ public:
     NodeHost& host() { return host_; }
     // The app's own settings, kept in the data directory beside the wallet they belong to.
     QString settings_file() const;
+    // Milestone 10: the network's rules (address format) and name ("testnet", "mainnet", ...).
+    const ConsensusParams& params() const;
+    QString network_name() const;
 
     // getwalletinfo as last seen; null while there's no wallet (or before the first answer).
     const json& wallet() const { return wallet_; }

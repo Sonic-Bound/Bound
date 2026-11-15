@@ -21,7 +21,8 @@
 </p>
 
 > [!NOTE]
-> BOUND runs as a **testnet**: a learning project whose coins have no value.
+> BOUND runs as a **testnet**, whose coins have no value. **Mainnet is on its way:** see the
+> [road to mainnet](docs/mainnet-roadmap.md).
 
 <p align="center">
   <img src="docs/screenshots/wallet.png" width="780" alt="The BOUND wallet: balances, the network, recent transactions">
@@ -62,22 +63,29 @@ A new node finds the network on its own: it asks the built-in seed, then learns 
 nodes from its peers. To mine, open **Mining** in the app and press *Start mining*, or start the
 node with `boundd node --mine <address>`.
 
-## Testnet parameters
+## Networks
 
-| | |
-|---|---|
-| Block time | 60 seconds |
-| Difficulty | retargets every 1,440 blocks (1 day), at most 4× each time |
-| Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) |
-| Supply | 20,999,999.727 BOUND in all (1 BOUND = 10<sup>8</sup> units) |
-| Maturity | mined coins can be spent after 100 blocks |
-| Blocks | at most 1 MB, timestamps at most 2 hours ahead |
-| Addresses | Base58Check, start with `9` |
-| Ports | P2P 18333, RPC 18332 (127.0.0.1 only) |
-| Relay policy | at least 1 unit per byte in fees, no outputs under 420 units, full RBF, at most 25 unconfirmed ancestors or descendants |
+Every program takes `--testnet` (the default until mainnet launches), `--mainnet` or `--regtest`,
+and each network keeps its chain in its own data directory.
 
-Genesis `0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293`, message:
-*"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*.
+| | Testnet (live) | Mainnet (not launched yet) | Regtest |
+|---|---|---|---|
+| Block time | 60 seconds | 10 minutes | 10 minutes |
+| Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 210,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
+| Supply | 20,999,999.727 BOUND | 20,999,999.9769 BOUND, no premine | |
+| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT, every block (coming in milestone 11) | fixed and trivial: any CPU, instantly |
+| Addresses | start with `9` (51 characters) | start with `B` (52 characters) | start with `9` |
+| Ports | P2P 18333, RPC 18332 | P2P 7333, RPC 7332 | P2P 18544, RPC 18543 |
+
+Shared by all: 1 BOUND = 10<sup>8</sup> units; mined coins can be spent after 100 blocks; blocks of
+at most 1 MB; timestamps at most 2 hours ahead; RPC on 127.0.0.1 only. Relay policy: at least 1 unit
+per byte in fees, no outputs under 420 units, full RBF, at most 25 unconfirmed ancestors or
+descendants.
+
+The testnet's genesis is `0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293`, with
+the message *"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*.
+Mainnet's genesis is a placeholder until launch day: a node on it warns that its coins will be
+thrown away.
 
 ## Build
 
@@ -153,6 +161,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 7½ | Hardening: discouragement, bans, headers presync | ✅ [notes](docs/hardening.md) |
 | 8 | Public testnet: seeds and a DNS seeder, block explorer, Linux, home nodes | ✅ [notes](docs/milestone-8.md) |
 | 9 | Desktop wallet (`bound-qt`), background mining by RPC | ✅ [notes](docs/milestone-9.md) |
+| 10 | Networks: mainnet, testnet and regtest side by side | ✅ [notes](docs/milestone-10.md) |
+| 11–15 | ASERT difficulty, hardening, releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout
 

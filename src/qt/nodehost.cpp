@@ -22,7 +22,7 @@ NodeHost::~NodeHost() {
 }
 
 std::uint16_t NodeHost::rpc_port() const {
-    return options_.rpc_port != 0 ? options_.rpc_port : testnet_params().default_rpc_port;
+    return options_.rpc_port != 0 ? options_.rpc_port : params().default_rpc_port;
 }
 
 void NodeHost::start() {

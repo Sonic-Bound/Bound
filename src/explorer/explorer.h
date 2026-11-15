@@ -34,6 +34,7 @@ namespace bound {
 using RpcCall = std::function<json(const std::string& method, const json& params)>;
 
 struct ExplorerOptions {
+    std::string network = "testnet";  // milestone 10: on every network but mainnet, coins have no value
     std::string title = "BOUND testnet explorer";
     int home_blocks = 15;           // blocks listed on the front page
     std::size_t page_size = 25;     // rows per page of an address's history

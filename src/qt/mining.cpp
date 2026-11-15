@@ -81,8 +81,8 @@ void MiningPage::toggle() {
     if (!mining_) {
         const QString payee = payee_->text().trimmed();
         if (!payee.isEmpty()) {
-            if (!decode_address(payee.toStdString(), testnet_params().address_version)) {
-                paying_->setText(QStringLiteral("That's not a testnet address."));
+            if (!decode_address(payee.toStdString(), session_.params().address_version)) {
+                paying_->setText(QStringLiteral("That's not a %1 address.").arg(session_.network_name()));
                 return;
             }
             params.push_back(payee.toStdString());

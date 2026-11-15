@@ -4,6 +4,7 @@
 // itself, as Bitcoin-Qt does.
 
 #include "core/leveldb_store.h"
+#include "core/params.h"
 #include "core/storage.h"
 
 #include <atomic>
@@ -27,6 +28,7 @@ struct DataDir {
 };
 
 struct NodeOptions {
+    Network network = kDefaultNetwork;  // milestone 10; set from --mainnet, --testnet, --regtest
     std::uint16_t port = 0;      // P2P; 0: the network's default
     std::uint16_t rpc_port = 0;  // JSON-RPC on 127.0.0.1; 0: the network's default
     bool listen = true;
@@ -43,7 +45,8 @@ struct NodeOptions {
 };
 
 // The node options in `args` (--port, --connect, ...; see boundd's usage). nullopt for an option it
-// doesn't know or one missing its value; throws std::invalid_argument for a bad value.
+// doesn't know or one missing its value; throws std::invalid_argument for a bad value. The
+// network isn't among them: the programs take it first (take_network in app/datadir.h).
 std::optional<NodeOptions> parse_node_options(std::span<const std::string_view> args);
 
 // One line for the node's log, without a timestamp: the caller adds one if it wants.

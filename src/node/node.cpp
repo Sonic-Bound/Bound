@@ -150,7 +150,7 @@ std::optional<NodeOptions> parse_node_options(std::span<const std::string_view> 
 
 void run_node(const std::filesystem::path& datadir, const NodeOptions& options, const std::atomic<bool>& interrupt,
               const NodeLog& log) {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params_for(options.network);
     const std::size_t block_budget = p.max_block_size - 1000;  // room after the header and coinbase
     const auto log_line = [&log](const std::string& text) {
         if (log) log(text);
@@ -160,7 +160,7 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
     MiningControl mining;
     if (options.mine) {
         mining.payee = decode_address(*options.mine, p.address_version);
-        if (!mining.payee) throw std::invalid_argument("not a testnet address: " + *options.mine);
+        if (!mining.payee) throw std::invalid_argument("not a " + std::string(p.network_name) + " address: " + *options.mine);
     }
 
     std::filesystem::create_directories(datadir);
@@ -232,8 +232,13 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
     const CookieFile cookie_file(cookie_path(datadir), cookie);
     connman.add_client(http);
 
-    log_line(std::format("BOUND testnet node: height {}, {} known peer addresses, data in {}", chain.height(),
+    log_line(std::format("BOUND {} node: height {}, {} known peer addresses, data in {}", p.network_name, chain.height(),
                          addrman.size(), datadir.string()));
+    if (!p.launched) {
+        log_line(std::format("WARNING: {} hasn't launched. Its genesis is provisional, and every coin on this chain will be "
+                             "thrown away when the real one is mined.",
+                             p.network_name));
+    }
     log_line(options.listen ? std::format("listening on port {}", connman.port()) : "not listening");
     for (const NetAddress& addr : peer_config.external) log_line("external address " + addr.to_string());
     log_line(std::format("JSON-RPC on 127.0.0.1:{}", http.port()));

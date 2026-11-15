@@ -18,6 +18,13 @@ QString Session::settings_file() const {
     return QString::fromStdU16String((host_.datadir() / "bound-qt.ini").u16string());
 }
 
+const ConsensusParams& Session::params() const { return host_.params(); }
+
+QString Session::network_name() const {
+    const std::string_view name = host_.params().network_name;
+    return QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size()));
+}
+
 void Session::with_unlocked(QWidget* parent, const QString& purpose, std::function<void(Finish finish)> action) {
     const bool locked = !has_wallet() || wallet_.value("locked", true);
     if (!locked) {

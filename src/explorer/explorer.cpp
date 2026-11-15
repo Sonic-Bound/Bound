@@ -283,7 +283,9 @@ HttpResponse Explorer::render(const Page& page) const {
             "placeholder=\"Block height or hash, transaction id, or address\" aria-label=\"Search\">"
             "<button type=\"submit\">Search</button></form></header><main>";
     html += page.body;
-    html += "</main><footer>A testnet: these coins have no value. Pages show what one BOUND node sees.</footer></body></html>";
+    html += "</main><footer>";
+    if (options_.network != "mainnet") html += "A " + esc(options_.network) + ": these coins have no value. ";
+    html += "Pages show what one BOUND node sees.</footer></body></html>";
     return {page.status, std::move(html), "text/html; charset=utf-8", std::move(headers)};
 }
 
@@ -432,7 +434,7 @@ Explorer::Page Explorer::address(std::string_view id, std::size_t page) {
     if (!is_address_like(id)) return message(404, "Not found", "That isn't a BOUND address.");
     const std::string address(id);
     if (!flag(call("validateaddress", json::array({address})), "isvalid")) {
-        return message(404, "Not found", "That isn't a BOUND testnet address.");
+        return message(404, "Not found", "That isn't a BOUND " + options_.network + " address.");
     }
     json summary;
     try {

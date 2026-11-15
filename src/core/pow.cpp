@@ -80,6 +80,7 @@ std::uint32_t next_work_required(const BlockIndex& parent, const ConsensusParams
 
 std::uint32_t next_work_required(int parent_height, std::uint32_t parent_bits, std::int64_t parent_time,
                                  const std::function<std::int64_t(int)>& time_at, const ConsensusParams& params) {
+    if (params.pow_no_retargeting) return parent_bits;  // regtest
     const int interval = params.retarget_interval;
     if ((parent_height + 1) % interval != 0) return parent_bits;
 

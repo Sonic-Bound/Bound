@@ -32,6 +32,8 @@ public:
     bool running() const { return thread_.joinable() && !done_; }
     const std::filesystem::path& datadir() const { return datadir_; }
     std::uint16_t rpc_port() const;
+    Network network() const { return options_.network; }  // milestone 10
+    const ConsensusParams& params() const { return params_for(options_.network); }
 
 signals:
     void log_line(const QString& line);  // from the node inside, timestamped

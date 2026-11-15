@@ -1,6 +1,7 @@
-// boundd, the BOUND node, on testnet rules. The chain is kept in a data directory (default
-// %APPDATA%\BOUND\testnet, or ~/.bound/testnet):
-//   boundd [--datadir <dir>] node [--port <p>] [--rpcport <p>] [--nolisten | --local]
+// boundd, the BOUND node. The network comes first: --testnet (the default until mainnet
+// launches), --mainnet or --regtest. Each keeps its chain in its own data directory (default
+// %APPDATA%\BOUND\<network>, or ~/.bound/<network>):
+//   boundd [network] [--datadir <dir>] node [--port <p>] [--rpcport <p>] [--nolisten | --local]
 //                                 [--connect <host[:port]>]... [--seednode <host[:port]>]...
 //                                 [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]
 //                                 [--externalip <ip[:port]>]... [--mine <address>]
@@ -23,7 +24,8 @@
 //   boundd demo                     mine, wait out coinbase maturity, pay someone through the
 //                                   mempool, lose the payment to a reorganisation, and see the
 //                                   mempool put it back
-//   boundd genesis [message] [time] mine a testnet genesis block (prints the values for params.cpp)
+//   boundd genesis [message] [time] mine a genesis block for the network (prints the values for
+//                                   params.cpp)
 #include "app/datadir.h"
 #include "core/address.h"
 #include "core/consensus.h"
@@ -60,15 +62,19 @@ namespace {
 
 using namespace bound;
 
+// Milestone 10: the network the command works on (--mainnet, --testnet, --regtest).
+Network g_network = kDefaultNetwork;
+const ConsensusParams& params() { return params_for(g_network); }
+
 PublicKey parse_address(std::string_view address) {
-    const std::optional<PublicKey> key = decode_address(address, testnet_params().address_version);
-    if (!key) throw std::invalid_argument("not a testnet address: " + std::string(address));
+    const std::optional<PublicKey> key = decode_address(address, params().address_version);
+    if (!key) throw std::invalid_argument("not a " + std::string(params().network_name) + " address: " + std::string(address));
     return *key;
 }
 
 std::string format_amount(Amount a) { return format_coins(a) + " " + std::string(kTicker); }
 
-std::string address_of(const KeyPair& key) { return encode_address(key.public_key(), testnet_params().address_version); }
+std::string address_of(const KeyPair& key) { return encode_address(key.public_key(), params().address_version); }
 
 // Room a block leaves for transactions after its header and coinbase.
 std::size_t block_budget(const ConsensusParams& p) { return p.max_block_size - 1000; }
@@ -96,14 +102,14 @@ void receive(Chainstate& chain, const Block& block) {
 }
 
 int cmd_demo() {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params();
     Chainstate chain(p);  // Alice's node
     Mempool mempool(chain);
     const KeyPair alice = KeyPair::generate();
     const KeyPair bob = KeyPair::generate();
     const KeyPair carol = KeyPair::generate();
 
-    std::cout << "BOUND testnet, in memory. Genesis " << p.genesis_hash.to_hex() << "\n"
+    std::cout << "BOUND " << p.network_name << ", in memory. Genesis " << p.genesis_hash.to_hex() << "\n"
               << "Alice " << address_of(alice) << "\nBob   " << address_of(bob) << "\nCarol " << address_of(carol)
               << "\n\n1. Alice mines 101 blocks (coinbase outputs need " << p.coinbase_maturity << " blocks to mature):\n";
     for (int i = 1; i <= 101; ++i) mine_next(chain, alice.public_key(), {}, i <= 3 || i % 25 == 0 || i == 101);
@@ -172,7 +178,7 @@ int cmd_demo() {
 }
 
 int cmd_mine(const std::filesystem::path& datadir, int count, std::optional<std::string_view> address) {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params();
     DataDir data(datadir);
     Chainstate chain(p, data.db, data.blocks);
     PublicKey miner{};
@@ -206,17 +212,17 @@ int cmd_node(const std::filesystem::path& datadir, const NodeOptions& options) {
 }
 
 int cmd_info(const std::filesystem::path& datadir) {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params();
     DataDir data(datadir);
     const Chainstate chain(p, data.db, data.blocks);
     const BlockIndex& tip = chain.tip();
     const int next_retarget = (tip.height / p.retarget_interval + 1) * p.retarget_interval;
+    const std::string retarget = p.pow_no_retargeting ? "fixed" : std::format("retarget at #{}", next_retarget);
     std::cout << std::format("data directory   {}\n", datadir.string())
-              << std::format("network          {}\n", p.network_name)
+              << std::format("network          {}{}\n", p.network_name, p.launched ? "" : " (not launched: a provisional genesis)")
               << std::format("height           {}\n", tip.height)
               << std::format("tip              {}  {} UTC\n", tip.hash.to_hex(), format_utc(tip.header.time))
-              << std::format("difficulty       {:.2f} for the next block, retarget at #{}\n",
-                             difficulty(next_work_required(tip, p), p), next_retarget)
+              << std::format("difficulty       {:.2f} for the next block, {}\n", difficulty(next_work_required(tip, p), p), retarget)
               << std::format("chain work       {:.0f} expected hashes\n", tip.chain_work.to_double())
               << std::format("blocks known     {} ({} off the active chain)\n", chain.tree_size(),
                              chain.tree_size() - static_cast<std::size_t>(tip.height + 1))
@@ -226,7 +232,7 @@ int cmd_info(const std::filesystem::path& datadir) {
 }
 
 int cmd_balance(const std::filesystem::path& datadir, std::string_view address) {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params();
     const PublicKey owner = parse_address(address);
     DataDir data(datadir);
     const Chainstate chain(p, data.db, data.blocks);
@@ -238,7 +244,7 @@ int cmd_balance(const std::filesystem::path& datadir, std::string_view address) 
 }
 
 int cmd_genesis(std::string_view message, std::uint32_t time) {
-    const ConsensusParams& p = testnet_params();
+    const ConsensusParams& p = params();
     if (message.size() > Transaction::kMaxMemo) throw std::invalid_argument("message is longer than 100 bytes");
     Block g;
     g.txs.push_back(make_coinbase(0, block_subsidy(0, p), PublicKey{}, bytes_of(message)));
@@ -256,17 +262,18 @@ int cmd_genesis(std::string_view message, std::uint32_t time) {
 }
 
 int usage() {
-    std::cerr << "usage: boundd [--datadir <dir>] node [--port <port>] [--rpcport <port>] [--nolisten | --local]\n"
+    std::cerr << "usage: boundd [network] [--datadir <dir>] node [--port <port>] [--rpcport <port>] [--nolisten | --local]\n"
                  "                                    [--connect <host[:port]>]... [--seednode <host[:port]>]...\n"
                  "                                    [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]\n"
                  "                                    [--externalip <ip[:port]>]... [--mine <address>]\n"
-                 "       boundd [--datadir <dir>] mine <count> [address]\n"
-                 "       boundd [--datadir <dir>] info\n"
-                 "       boundd [--datadir <dir>] balance <address>\n"
-                 "       boundd demo\n"
-                 "       boundd genesis [message] [unix-time]\n"
+                 "       boundd [network] [--datadir <dir>] mine <count> [address]\n"
+                 "       boundd [network] [--datadir <dir>] info\n"
+                 "       boundd [network] [--datadir <dir>] balance <address>\n"
+                 "       boundd [network] demo\n"
+                 "       boundd [network] genesis [message] [unix-time]\n"
+                 "The network is --testnet (the default until mainnet launches), --mainnet or --regtest.\n"
                  "The data directory defaults to "
-              << default_datadir().string() << ". Talk to a running node with bound-cli.\n";
+              << default_datadir(g_network).string() << ". Talk to a running node with bound-cli.\n";
     return 2;
 }
 
@@ -275,15 +282,19 @@ int usage() {
 int main(int argc, char** argv) {
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
-        std::filesystem::path datadir = default_datadir();
+        // The network and --datadir come first, in either order.
+        g_network = take_network(args, 3);
+        std::optional<std::filesystem::path> chosen_datadir;
         if (args.size() >= 2 && args[0] == "--datadir") {
-            datadir = std::filesystem::path(args[1]);
+            chosen_datadir = std::filesystem::path(args[1]);
             args.erase(args.begin(), args.begin() + 2);
         }
+        const std::filesystem::path datadir = chosen_datadir.value_or(default_datadir(g_network));
         if (args.empty()) return usage();
         if (args[0] == "node") {
-            const std::optional<NodeOptions> options = parse_node_options(std::span(args).subspan(1));
+            std::optional<NodeOptions> options = parse_node_options(std::span(args).subspan(1));
             if (!options) return usage();
+            options->network = g_network;
             return cmd_node(datadir, *options);
         }
         if (args[0] == "mine" && (args.size() == 2 || args.size() == 3)) {
@@ -295,10 +306,10 @@ int main(int argc, char** argv) {
         if (args[0] == "demo" && args.size() == 1) return cmd_demo();
         if (args[0] == "genesis" && args.size() <= 3) {
             const std::string default_message = std::string(
-                testnet_params().genesis_coinbase.memo.begin(), testnet_params().genesis_coinbase.memo.end());
+                params().genesis_coinbase.memo.begin(), params().genesis_coinbase.memo.end());
             const std::string_view message = args.size() >= 2 ? args[1] : std::string_view(default_message);
             const auto time = args.size() == 3 ? static_cast<std::uint32_t>(std::stoul(std::string(args[2])))
-                                               : testnet_params().genesis.time;
+                                               : params().genesis.time;
             return cmd_genesis(message, time);
         }
         return usage();

@@ -52,7 +52,13 @@ SendPage::SendPage(Session& session, QWidget* parent) : QWidget(parent), session
 
     address_ = new QLineEdit(form);
     address_->setFont(mono_font());
-    address_->setPlaceholderText(QStringLiteral("A BOUND testnet address: 51 characters starting with 9"));
+    {
+        const QString example = QString::fromStdString(encode_address(PublicKey{}, session_.params().address_version));
+        address_->setPlaceholderText(QStringLiteral("A BOUND %1 address: %2 characters starting with %3")
+                                         .arg(session_.network_name())
+                                         .arg(example.size())
+                                         .arg(example.left(1)));
+    }
     address_note_ = muted_label(QString(), form);
     g->addWidget(new QLabel(QStringLiteral("Pay to"), form), 0, 0);
     g->addWidget(address_, 0, 1, 1, 3);
@@ -146,13 +152,13 @@ void SendPage::show_fee_estimate(double units_per_byte) {
 
 void SendPage::check() {
     const QString address = address_->text().trimmed();
-    const bool address_ok = decode_address(address.toStdString(), testnet_params().address_version).has_value();
+    const bool address_ok = decode_address(address.toStdString(), session_.params().address_version).has_value();
     if (address.isEmpty()) {
         address_note_->setText(QString());
     } else if (address_ok) {
-        address_note_->setText(QStringLiteral("A valid testnet address."));
+        address_note_->setText(QStringLiteral("A valid %1 address.").arg(session_.network_name()));
     } else {
-        address_note_->setText(QStringLiteral("Not a testnet address: check it (the last characters are a checksum)."));
+        address_note_->setText(QStringLiteral("Not a %1 address: check it (the last characters are a checksum).").arg(session_.network_name()));
     }
     const bool memo_ok = memo_->text().toUtf8().size() <= static_cast<qsizetype>(Transaction::kMaxMemo);
     const bool fee_ok = auto_fee_->isChecked() || typed_rate(fee_rate_).has_value();

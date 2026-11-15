@@ -1,5 +1,6 @@
 // bound-explorer: a block explorer for a BOUND node, as web pages.
-//   bound-explorer [--datadir <dir>] [--rpcport <port>] [--port <port>] [--public] [--title <text>] [--quiet]
+//   bound-explorer [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>] [--port <port>]
+//                  [--public] [--title <text>] [--quiet]
 // It asks the node on this machine over JSON-RPC (with the cookie in the node's data directory)
 // and serves the pages on http://127.0.0.1:<port> (8080 unless told otherwise); with --public, on
 // every interface, for the world to read. Run the node with --index, or transactions already in
@@ -44,12 +45,12 @@ std::string printable(std::string_view text) {
 }
 
 int usage() {
-    std::cerr << "usage: bound-explorer [--datadir <dir>] [--rpcport <port>] [--port <port>] [--public]\n"
-                 "                      [--title <text>] [--quiet]\n"
+    std::cerr << "usage: bound-explorer [--mainnet | --testnet | --regtest] [--datadir <dir>] [--rpcport <port>]\n"
+                 "                      [--port <port>] [--public] [--title <text>] [--quiet]\n"
                  "Serves a block explorer for the BOUND node on this machine at http://127.0.0.1:<port>\n"
                  "(default 8080); --public serves it on every interface. The node's data directory\n"
-                 "defaults to "
-              << default_datadir().string() << ".\n";
+                 "defaults to the network's (testnet's: "
+              << default_datadir().string() << ").\n";
     return 2;
 }
 
@@ -63,13 +64,16 @@ std::uint16_t parse_port(std::string_view text) {
 
 int main(int argc, char** argv) {
     try {
-        const std::vector<std::string_view> args(argv + 1, argv + argc);
-        std::filesystem::path datadir = default_datadir();
-        std::uint16_t rpc_port = testnet_params().default_rpc_port;
+        std::vector<std::string_view> args(argv + 1, argv + argc);
+        const Network network = take_network(args);  // milestone 10
+        std::filesystem::path datadir = default_datadir(network);
+        std::uint16_t rpc_port = params_for(network).default_rpc_port;
         std::uint16_t port = 8080;
         bool open_to_all = false;
         bool quiet = false;
         ExplorerOptions options;
+        options.network = std::string(network_name(network));
+        options.title = network == Network::Mainnet ? "BOUND explorer" : "BOUND " + options.network + " explorer";
         for (std::size_t i = 0; i < args.size(); ++i) {
             const bool has_value = i + 1 < args.size();
             if (args[i] == "--datadir" && has_value) {

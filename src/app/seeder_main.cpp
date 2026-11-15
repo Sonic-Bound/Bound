@@ -1,5 +1,6 @@
-// bound-seeder: a DNS seed for the BOUND testnet (the job of Bitcoin's DNS seeders).
-//   bound-seeder --host <name> --ns <name> [--mbox <name>] [--dnsport <port>] [--dnsaddr <ip>]
+// bound-seeder: a DNS seed for a BOUND network (the job of Bitcoin's DNS seeders); testnet unless
+// --mainnet or --regtest says otherwise.
+//   bound-seeder [--mainnet | --testnet | --regtest] --host <name> --ns <name> [--mbox <name>] [--dnsport <port>] [--dnsaddr <ip>]
 //                [--node <host[:port]>]... [--datadir <dir>] [--probes <n>] [--allowprivate] [--quiet]
 // It crawls the network, starting from the --node addresses (and whatever it remembered in
 // <datadir>/seeder.dat), and answers DNS queries for --host with the addresses of nodes that are
@@ -44,15 +45,16 @@ void on_signal(int) { g_stop = true; }
 void log_line(const std::string& text) { std::cout << format_utc(unix_now()) << " " << text << "\n" << std::flush; }
 
 int usage() {
-    std::cerr << "usage: bound-seeder --host <name> --ns <name> [--mbox <name>] [--dnsport <port>] [--dnsaddr <ip>]\n"
+    std::cerr << "usage: bound-seeder [--mainnet | --testnet | --regtest] --host <name> --ns <name> [--mbox <name>]\n"
+                 "                    [--dnsport <port>] [--dnsaddr <ip>]\n"
                  "                    [--node <host[:port]>]... [--datadir <dir>] [--probes <n>] [--allowprivate]\n"
                  "                    [--quiet]\n"
                  "  --host     the seed's name, the one nodes look up: seed.example.org\n"
                  "  --ns       this machine's name, which the parent zone delegates the seed's name to\n"
                  "  --mbox     the operator's mailbox, DNS style (hostmaster.example.org); default hostmaster.<host>\n"
                  "  --dnsport  53 unless said otherwise; --dnsaddr binds one address instead of all\n"
-                 "  --node     a node to start crawling from (the testnet's port unless one is given)\n"
-                 "  --datadir  where seeder.dat is kept; default "
+                 "  --node     a node to start crawling from (the network's port unless one is given)\n"
+                 "  --datadir  where seeder.dat is kept; default <the network's data directory>/seeder, e.g. "
               << (default_datadir() / "seeder").string() << "\n";
     return 2;
 }
@@ -84,15 +86,16 @@ void save(const std::filesystem::path& file, const Bytes& data) {
 
 int main(int argc, char** argv) {
     try {
-        const ConsensusParams& params = testnet_params();
-        const std::vector<std::string_view> args(argv + 1, argv + argc);
+        std::vector<std::string_view> args(argv + 1, argv + argc);
+        const Network network = take_network(args);  // milestone 10
+        const ConsensusParams& params = params_for(network);
         std::optional<std::string> host;
         std::optional<std::string> ns;
         std::optional<std::string> mbox;
         std::uint16_t dns_port = 53;
         std::optional<NetAddress> dns_address;
         std::vector<std::string> nodes;
-        std::filesystem::path datadir = default_datadir() / "seeder";
+        std::filesystem::path datadir = default_datadir(network) / "seeder";
         CrawlerOptions crawl;
         crawl.magic = params.message_start;
         crawl.default_port = params.default_port;

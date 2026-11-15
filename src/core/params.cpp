@@ -59,11 +59,112 @@ ConsensusParams make_testnet() {
     return p;
 }
 
+// Milestone 10: mainnet, with Bitcoin's schedule (the project owner's choice): 10-minute blocks,
+// 50 BOUND halving every 210,000 blocks, 20,999,999.9769 BOUND in all, no premine.
+ConsensusParams make_mainnet() {
+    ConsensusParams p;
+    p.network_name = "mainnet";
+    p.launched = false;  // the genesis below is provisional: launch day mines the real one
+
+    p.pow_limit_bits = 0x1f00ffff;  // TODO(launch): an initial difficulty that fits the launch hash rate
+    p.pow_limit = target_from_compact(p.pow_limit_bits).value();
+    p.max_future_block_time = 2 * 60 * 60;
+    p.median_time_span = 11;
+
+    p.target_spacing = 10 * 60;
+    p.initial_subsidy = 50 * kCoin;
+    p.halving_interval = 210'000;
+    p.max_block_size = 1'000'000;
+    p.address_version = {0x46, 0xfb};  // every address starts with 'B' (52 characters)
+    p.coinbase_maturity = 100;
+    p.retarget_interval = 2016;  // TODO(milestone 11): ASERT, every block, replaces this
+
+    p.message_start = {0xd6, 0xb3, 0xe8, 0xf7};  // high bits set, as testnet's (see there)
+    p.default_port = 7333;
+    p.default_rpc_port = 7332;
+    p.seeds = {};  // the launch's always-on nodes and DNS seeders
+    p.minimum_chain_work = 0;
+
+    p.genesis_coinbase = make_coinbase(0, 50 * kCoin, PublicKey{},
+                                       bytes_of("BOUND mainnet: a provisional genesis, replaced on launch day"));
+    p.genesis.version = 1;
+    p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
+    p.genesis.time = 1794700800;  // 2026-11-15 00:00:00 UTC
+    p.genesis.bits = p.pow_limit_bits;
+    p.genesis.nonce = 17410;
+    p.genesis_hash = uint256::from_hex("0000725c9029a8709917e390fa8e914a370e611f7216086116af27104c093ebd").value();
+    return p;
+}
+
+// Milestone 10: regtest, Bitcoin's private test network: blocks cost a couple of hashes, the
+// difficulty never moves, and halvings come every 150 blocks so tests can reach them.
+ConsensusParams make_regtest() {
+    ConsensusParams p;
+    p.network_name = "regtest";
+
+    p.pow_limit_bits = 0x207fffff;  // half of all hashes meet it
+    p.pow_limit = target_from_compact(p.pow_limit_bits).value();
+    p.pow_no_retargeting = true;
+    p.max_future_block_time = 2 * 60 * 60;
+    p.median_time_span = 11;
+
+    p.target_spacing = 10 * 60;
+    p.initial_subsidy = 50 * kCoin;
+    p.halving_interval = 150;
+    p.max_block_size = 1'000'000;
+    p.address_version = 0xf0;  // testnet's, as Bitcoin's regtest shares testnet's
+    p.coinbase_maturity = 100;
+    p.retarget_interval = 2016;
+
+    p.message_start = {0xc1, 0xe5, 0xa9, 0xd2};
+    p.default_port = 18544;
+    p.default_rpc_port = 18543;
+    p.seeds = {};
+    p.minimum_chain_work = 0;
+
+    p.genesis_coinbase = make_coinbase(0, 50 * kCoin, PublicKey{}, bytes_of("BOUND regtest"));
+    p.genesis.version = 1;
+    p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
+    p.genesis.time = 1793491200;  // 2026-11-01 00:00:00 UTC
+    p.genesis.bits = p.pow_limit_bits;
+    p.genesis.nonce = 0;  // half of all hashes meet regtest's target, and the first try did
+    p.genesis_hash = uint256::from_hex("50c65d2c8b59bc4dd295e7afa6d42c52a138df9a3b02df467db4c4693d2e0456").value();
+    return p;
+}
+
 }  // namespace
+
+const ConsensusParams& mainnet_params() {
+    static const ConsensusParams params = make_mainnet();
+    return params;
+}
 
 const ConsensusParams& testnet_params() {
     static const ConsensusParams params = make_testnet();
     return params;
+}
+
+const ConsensusParams& regtest_params() {
+    static const ConsensusParams params = make_regtest();
+    return params;
+}
+
+const ConsensusParams& params_for(Network network) {
+    switch (network) {
+    case Network::Mainnet: return mainnet_params();
+    case Network::Testnet: return testnet_params();
+    case Network::Regtest: return regtest_params();
+    }
+    return testnet_params();
+}
+
+std::string_view network_name(Network network) { return params_for(network).network_name; }
+
+std::optional<Network> network_flag(std::string_view arg) {
+    if (arg == "--mainnet") return Network::Mainnet;
+    if (arg == "--testnet") return Network::Testnet;
+    if (arg == "--regtest") return Network::Regtest;
+    return std::nullopt;
 }
 
 }  // namespace bound

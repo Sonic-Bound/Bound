@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,19 @@ namespace bound {
 
 inline constexpr std::string_view kCoinName = "BOUND";
 inline constexpr std::string_view kTicker = "BOUND";
+
+// Milestone 10: the bytes in front of the key in an address, which fix its first character and
+// keep networks apart. One byte can only fix a digit 2-9 (testnet's 0xf0 gives '9'); two bytes
+// can fix a letter (mainnet's 0x46fb gives 'B').
+struct AddressVersion {
+    std::array<std::uint8_t, 2> bytes{};
+    std::uint8_t size = 0;
+
+    constexpr AddressVersion() = default;
+    constexpr AddressVersion(std::uint8_t b) : bytes{b, 0}, size(1) {}  // implicit on purpose
+    constexpr AddressVersion(std::uint8_t b0, std::uint8_t b1) : bytes{b0, b1}, size(2) {}
+    bool operator==(const AddressVersion&) const = default;
+};
 
 // Consensus rules that differ per network. Grows every milestone.
 struct ConsensusParams {
@@ -34,7 +48,7 @@ struct ConsensusParams {
     Amount initial_subsidy = 0;        // coinbase reward at height 0
     int halving_interval = 0;          // blocks between halvings
     std::size_t max_block_size = 0;    // serialized bytes
-    std::uint8_t address_version = 0;  // Base58Check version byte of this network's addresses
+    AddressVersion address_version;    // Base58Check version of this network's addresses
     Transaction genesis_coinbase;      // the genesis block's only transaction; never spendable
 
     // Milestone 3: spending.
@@ -42,6 +56,8 @@ struct ConsensusParams {
 
     // Milestone 4: difficulty adjustment.
     int retarget_interval = 0;  // blocks per difficulty period; see next_work_required
+    // Milestone 10: every block keeps its parent's difficulty (regtest, for tests on one machine).
+    bool pow_no_retargeting = false;
 
     // Milestone 6: the peer-to-peer network. Not consensus rules, but they differ per network too.
     std::array<std::uint8_t, 4> message_start{};  // the first 4 bytes of every P2P message
@@ -57,11 +73,31 @@ struct ConsensusParams {
     // headers (Bitcoin's nMinimumChainWork). Not a consensus rule; raise it each release to the
     // work of the chain at the time. 0: a fresh node stores any valid headers.
     arith_uint256 minimum_chain_work;
+
+    // Milestone 10: false while the network's genesis is provisional (mainnet before launch day):
+    // its coins will be thrown away, and the node says so.
+    bool launched = true;
 };
 
-// BOUND testnet. Its genesis is mined with `boundd genesis`; re-mine it whenever a consensus
-// change alters the genesis block.
+// The networks, as Bitcoin has them: mainnet, where coins are meant to have value; testnet, for
+// trying things in public; regtest, a private network for tests on one machine, where any CPU
+// mines a block instantly.
+enum class Network { Mainnet, Testnet, Regtest };
+
+// Each network's genesis is mined with `boundd genesis`; re-mine it whenever a consensus change
+// alters the genesis block.
+const ConsensusParams& mainnet_params();
 const ConsensusParams& testnet_params();
+const ConsensusParams& regtest_params();
+const ConsensusParams& params_for(Network network);
+
+// Until mainnet launches, a node without --mainnet, --testnet or --regtest joins the testnet.
+inline constexpr Network kDefaultNetwork = Network::Testnet;
+
+// "mainnet", "testnet", "regtest": the name in the data directory's path and in the RPC.
+std::string_view network_name(Network network);
+// --mainnet, --testnet or --regtest, or nullopt for anything else.
+std::optional<Network> network_flag(std::string_view arg);
 
 // The genesis block: the header plus its coinbase, which genesis.merkle_root must commit to.
 inline Block genesis_block(const ConsensusParams& p) { return Block{p.genesis, {p.genesis_coinbase}}; }
