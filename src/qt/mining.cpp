@@ -1,4 +1,5 @@
 #include "core/address.h"
+#include "core/miner.h"
 #include "core/params.h"
 #include "qt/format.h"
 #include "qt/pages.h"
@@ -8,7 +9,11 @@
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <thread>
 
 namespace bound::gui {
 
@@ -33,7 +38,15 @@ MiningPage::MiningPage(Session& session, QWidget* parent) : QWidget(parent), ses
     toggle_ = new QPushButton(QStringLiteral("Start mining"), control);
     toggle_->setObjectName(QStringLiteral("primary"));
     toggle_->setMinimumWidth(150);
+    // Milestone 12: how many of the processor's threads mine; by default all but one.
+    const int cores = std::max(1, static_cast<int>(std::thread::hardware_concurrency()));
+    threads_ = new QSpinBox(control);
+    threads_->setRange(1, cores);
+    threads_->setValue(static_cast<int>(BackgroundMiner::default_threads()));
+    threads_->setSuffix(QStringLiteral(" threads"));
+    threads_->setToolTip(QStringLiteral("How many of this computer's %1 processor threads mine").arg(cores));
     row->addWidget(payee_, 1);
+    row->addWidget(threads_);
     row->addWidget(toggle_);
     c->addLayout(row);
     paying_ = muted_label(QString(), control);
@@ -71,6 +84,8 @@ void MiningPage::show_mining(const json& info) {
     difficulty_->setText(QString::number(info.value("difficulty", 0.0), 'f', 2));
     toggle_->setText(mining_ ? QStringLiteral("Stop mining") : QStringLiteral("Start mining"));
     payee_->setEnabled(!mining_);
+    threads_->setEnabled(!mining_);
+    if (mining_) threads_->setValue(static_cast<int>(int_of(info, "threads", threads_->value())));
     paying_->setText(mining_ ? QStringLiteral("Paying %1").arg(text_of(info, "address")) : QString());
 }
 
@@ -89,7 +104,10 @@ void MiningPage::toggle() {
         } else if (!session_.has_wallet()) {
             paying_->setText(QStringLiteral("Create a wallet first (Overview), or type an address to mine to."));
             return;
+        } else {
+            params.push_back(nullptr);  // a new address of the wallet
         }
+        params.push_back(threads_->value());
     }
     toggle_->setEnabled(false);
     session_.rpc().call(

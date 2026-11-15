@@ -5,8 +5,10 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
+#include <thread>
 
 using namespace bound;
 
@@ -94,4 +96,32 @@ TEST(Coinbase, KnownSerializationAndTxid) {
 TEST(Coinbase, HeightMakesTxidsUnique) {
     const PublicKey alice = test_key("alice").public_key();
     EXPECT_NE(make_coinbase(1, 5 * kCoin, alice, {}).txid(), make_coinbase(2, 5 * kCoin, alice, {}).txid());
+}
+
+// Milestone 12: several threads, each searching its own coinbases. Each piece of work yields one
+// block, and it's valid.
+TEST(BackgroundMiner, SeveralThreadsFindValidBlocks) {
+    using namespace std::chrono_literals;
+    const ConsensusParams p = easy_params();
+    Chainstate chain(p);
+    BackgroundMiner miner(p.pow_limit, 4);
+    EXPECT_EQ(miner.threads(), 4u);
+    EXPECT_GE(BackgroundMiner::default_threads(), 1u);
+    for (int i = 0; i < 8; ++i) {
+        miner.set_work(make_block_template(chain, test_key("miner").public_key(), {}, kTestGenesisTime + 60 * (i + 1)));
+        std::optional<Block> solved;
+        for (int wait = 0; wait < 5000 && !solved; ++wait) {
+            solved = miner.take_solved();
+            if (!solved) std::this_thread::sleep_for(1ms);
+        }
+        ASSERT_TRUE(solved.has_value());
+        ASSERT_TRUE(chain.accept_block(*solved, kTestNow).accepted());
+        std::this_thread::sleep_for(5ms);  // the other threads find out it's solved
+        EXPECT_FALSE(miner.take_solved().has_value());  // only the first solution is kept
+    }
+    EXPECT_EQ(chain.height(), 8);
+    EXPECT_GT(miner.hashes(), 0u);
+    miner.set_work(std::nullopt);  // paused: nothing more turns up
+    std::this_thread::sleep_for(5ms);
+    EXPECT_FALSE(miner.take_solved().has_value());
 }

@@ -4,7 +4,7 @@
 //   boundd [network] [--datadir <dir>] node [--port <p>] [--rpcport <p>] [--nolisten | --local]
 //                                 [--connect <host[:port]>]... [--seednode <host[:port]>]...
 //                                 [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]
-//                                 [--externalip <ip[:port]>]... [--mine <address>]
+//                                 [--externalip <ip[:port]>]... [--mine <address>] [--minethreads <n>]
 //                                                 run a node on the network until Ctrl+C or
 //                                                 `bound-cli stop`. JSON-RPC on 127.0.0.1
 //                                                 (bound-cli talks to it).
@@ -267,7 +267,7 @@ int usage() {
     std::cerr << "usage: boundd [network] [--datadir <dir>] node [--port <port>] [--rpcport <port>] [--nolisten | --local]\n"
                  "                                    [--connect <host[:port]>]... [--seednode <host[:port]>]...\n"
                  "                                    [--noseeds] [--maxinbound <n>] [--allowprivate] [--index]\n"
-                 "                                    [--externalip <ip[:port]>]... [--mine <address>]\n"
+                 "                                    [--externalip <ip[:port]>]... [--mine <address>] [--minethreads <n>]\n"
                  "       boundd [network] [--datadir <dir>] mine <count> [address]\n"
                  "       boundd [network] [--datadir <dir>] info\n"
                  "       boundd [network] [--datadir <dir>] balance <address>\n"

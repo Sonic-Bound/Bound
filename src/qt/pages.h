@@ -19,6 +19,7 @@ class QPlainTextEdit;
 class QProgressBar;
 class QPushButton;
 class QRadioButton;
+class QSpinBox;
 class QTableWidget;
 class QTabWidget;
 class QVBoxLayout;
@@ -124,6 +125,7 @@ private:
     Session& session_;
     QPushButton* toggle_;
     QLineEdit* payee_;
+    QSpinBox* threads_;  // milestone 12
     QLabel* status_;
     QLabel* rate_;
     QLabel* found_;

@@ -3,20 +3,42 @@
 #include "core/consensus.h"
 #include "core/pow.h"
 #include "core/validation.h"
+#include "crypto/sha256.h"
 #include "util/serialize.h"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <utility>
 
 namespace bound {
 
+// Milestone 12: the "midstate" trick every miner uses. The 80-byte header is two SHA-256 blocks,
+// and the nonce is in the second (bytes 76-79). The first 64 bytes are hashed once; each try then
+// copies that state and hashes only the last 16, then the 32-byte digest again. No serializing,
+// no allocation, two compressions instead of three.
 std::optional<BlockHeader> mine(BlockHeader header, const uint256& pow_limit, std::uint32_t start_nonce,
                                 std::uint64_t max_tries) {
+    const std::optional<uint256> target = target_from_compact(header.bits);
+    if (!target || target->is_zero() || *target > pow_limit) return std::nullopt;  // nothing can meet it
+    std::array<std::uint8_t, BlockHeader::kSize> bytes = header.serialize();
+    static_assert(BlockHeader::kSize == 80);
+    Sha256 midstate;
+    midstate.write(ByteSpan(bytes.data(), 64));
     std::uint64_t nonce = start_nonce;
     for (std::uint64_t tries = 0; tries < max_tries && nonce <= 0xffffffff; ++tries, ++nonce) {
-        header.nonce = static_cast<std::uint32_t>(nonce);
-        if (check_proof_of_work(header.hash(), header.bits, pow_limit)) return header;
+        const auto n = static_cast<std::uint32_t>(nonce);
+        bytes[76] = static_cast<std::uint8_t>(n);
+        bytes[77] = static_cast<std::uint8_t>(n >> 8);
+        bytes[78] = static_cast<std::uint8_t>(n >> 16);
+        bytes[79] = static_cast<std::uint8_t>(n >> 24);
+        Sha256 tail = midstate;
+        tail.write(ByteSpan(bytes.data() + 64, 16));
+        const uint256 hash(sha256(tail.finalize()));
+        if (hash <= *target) {
+            header.nonce = n;
+            return header;
+        }
     }
     return std::nullopt;
 }
@@ -81,12 +103,21 @@ Block mine_block(Block block, const uint256& pow_limit) {
     }
 }
 
-BackgroundMiner::BackgroundMiner(const uint256& pow_limit)
-    : pow_limit_(pow_limit), thread_([this](std::stop_token stop) { run(stop); }) {}
+BackgroundMiner::BackgroundMiner(const uint256& pow_limit, unsigned threads) : pow_limit_(pow_limit) {
+    const unsigned n = std::max(1u, threads);
+    threads_.reserve(n);
+    for (unsigned i = 0; i < n; ++i) threads_.emplace_back([this, i, n](std::stop_token stop) { run(stop, i, n); });
+}
 
 BackgroundMiner::~BackgroundMiner() {
-    thread_.request_stop();
+    for (std::jthread& t : threads_) t.request_stop();
     wake_.notify_all();
+    threads_.clear();  // joins them, before the members they use go
+}
+
+unsigned BackgroundMiner::default_threads() {
+    const unsigned cores = std::thread::hardware_concurrency();
+    return cores > 1 ? cores - 1 : 1;  // one left for the node itself
 }
 
 void BackgroundMiner::set_work(std::optional<Block> block) {
@@ -103,13 +134,20 @@ std::optional<Block> BackgroundMiner::take_solved() {
     return std::exchange(solved_, std::nullopt);
 }
 
-void BackgroundMiner::run(std::stop_token stop) {
+// Each of the `count` threads searches its own coinbases: thread `index` uses the extra nonces
+// index, index + count, index + 2 * count, ... (the template's 0 is thread 0's first), so no two
+// ever hash the same header.
+void BackgroundMiner::run(std::stop_token stop, unsigned index, unsigned count) {
     constexpr std::uint64_t kSlice = 1 << 16;  // nonces between looks for new work
     std::uint64_t mining = 0;                  // the generation `block` came from
     bool idle = true;                          // nothing to mine: none given yet, paused, or solved
     Block block;
     std::uint64_t nonce = 0;
     std::uint64_t extra = 0;
+    const auto use_extra = [&] {
+        block.txs[0].memo = extra_nonce(extra);
+        block.header.merkle_root = block.compute_merkle_root();
+    };
     while (!stop.stop_requested()) {
         {
             std::unique_lock lock(mutex_);
@@ -120,7 +158,11 @@ void BackgroundMiner::run(std::stop_token stop) {
                 if (idle) continue;
                 block = *work_;
                 nonce = 0;
-                extra = 0;
+                extra = index;
+                if (extra != 0) use_extra();
+            } else if (solved_generation_ == mining) {  // another thread found this one
+                idle = true;
+                continue;
             }
         }
         const std::uint64_t tries = std::min(kSlice, (std::uint64_t{1} << 32) - nonce);
@@ -129,14 +171,17 @@ void BackgroundMiner::run(std::stop_token stop) {
         if (solved) {
             block.header = *solved;
             const std::lock_guard lock(mutex_);
-            solved_ = block;
+            if (solved_generation_ != mining && generation_ == mining) {  // the first, and still wanted
+                solved_ = block;
+                solved_generation_ = mining;
+            }
             idle = true;
             continue;
         }
         nonce += tries;
-        if (nonce == std::uint64_t{1} << 32) {  // every nonce tried: change the coinbase and start over
-            block.txs[0].memo = extra_nonce(++extra);
-            block.header.merkle_root = block.compute_merkle_root();
+        if (nonce == std::uint64_t{1} << 32) {  // every nonce tried: this thread's next coinbase
+            extra += count;
+            use_extra();
             nonce = 0;
         }
     }

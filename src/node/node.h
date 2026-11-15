@@ -35,6 +35,7 @@ struct NodeOptions {
     bool local = false;  // listen on 127.0.0.1 only: for trying several nodes on one machine
     std::vector<std::string> connect;
     std::optional<std::string> mine;  // pay mined blocks to this address
+    unsigned mine_threads = 0;        // milestone 12: --minethreads; 0: every core but one
     // Milestone 8.
     std::vector<std::string> seednodes;      // asked for addresses, besides the network's own seeds
     bool use_seeds = true;                   // the network's built-in seeds

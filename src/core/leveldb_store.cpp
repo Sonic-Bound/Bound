@@ -10,7 +10,12 @@ namespace bound {
 
 namespace {
 
-leveldb::Slice slice(ByteSpan b) { return {reinterpret_cast<const char*>(b.data()), b.size()}; }
+// An empty span may carry a null pointer, which LevelDB hands to memcmp (undefined even for 0
+// bytes; UBSan caught it in milestone 12). LevelDB's own empty Slice points at "".
+leveldb::Slice slice(ByteSpan b) {
+    if (b.empty()) return {};
+    return {reinterpret_cast<const char*>(b.data()), b.size()};
+}
 
 ByteSpan span(const leveldb::Slice& s) { return {reinterpret_cast<const std::uint8_t*>(s.data()), s.size()}; }
 

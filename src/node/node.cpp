@@ -124,6 +124,16 @@ std::optional<NodeOptions> parse_node_options(std::span<const std::string_view> 
             options.connect.emplace_back(args[++i]);
         } else if (args[i] == "--mine" && has_value) {
             options.mine = std::string(args[++i]);
+        } else if (args[i] == "--minethreads" && has_value) {
+            const std::string text(args[++i]);
+            unsigned long n = 0;
+            try {
+                n = std::stoul(text);
+            } catch (const std::exception&) {
+                throw std::invalid_argument("--minethreads: not a number: " + text);
+            }
+            if (n < 1 || n > 1024) throw std::invalid_argument("--minethreads: from 1 to 1024");
+            options.mine_threads = static_cast<unsigned>(n);
         } else if (args[i] == "--seednode" && has_value) {
             options.seednodes.emplace_back(args[++i]);
         } else if (args[i] == "--noseeds") {
@@ -158,6 +168,7 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
 
     // Milestone 9: mining switched on and off while the node runs (setmining), --mine to start with.
     MiningControl mining;
+    mining.threads = options.mine_threads;
     if (options.mine) {
         mining.payee = decode_address(*options.mine, p.address_version);
         if (!mining.payee) throw std::invalid_argument("not a " + std::string(p.network_name) + " address: " + *options.mine);
@@ -251,6 +262,7 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
 
     std::optional<BackgroundMiner> miner;
     std::optional<PublicKey> mining_to;   // the payee `miner` was set up for
+    unsigned mining_threads = 0;          // and its thread count
     const BlockIndex* work_tip = nullptr;  // the tip the miner's current work builds on
     std::int64_t work_time = 0;
     std::size_t work_mempool = 0;  // the mempool's size when that work was made
@@ -266,12 +278,15 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
     connman.run([&] {
         if (interrupt) connman.stop();
         const std::int64_t now = unix_now();
-        if (mining.payee != mining_to) {  // setmining, or --mine at the start
+        const unsigned threads = mining.threads != 0 ? mining.threads : BackgroundMiner::default_threads();
+        if (mining.payee != mining_to || (mining_to && threads != mining_threads)) {  // setmining, or --mine at the start
             miner.reset();
             mining_to = mining.payee;
+            mining_threads = threads;
             if (mining_to) {
-                miner.emplace(p.pow_limit);
-                log_line("mining to " + encode_address(*mining_to, p.address_version));
+                miner.emplace(p.pow_limit, threads);
+                log_line(std::format("mining to {} on {} thread{}", encode_address(*mining_to, p.address_version), threads,
+                                     threads == 1 ? "" : "s"));
             } else {
                 log_line("stopped mining");
             }

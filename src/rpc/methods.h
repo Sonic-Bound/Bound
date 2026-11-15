@@ -20,6 +20,7 @@ namespace bound {
 // node's loop does the rest and reports back here (getmininginfo reads it).
 struct MiningControl {
     std::optional<PublicKey> payee;  // mining while set
+    unsigned threads = 0;            // milestone 12: how many; 0: BackgroundMiner::default_threads()
     bool paused = false;             // waiting out the initial sync
     double hashes_per_second = 0;    // over the last few seconds
     std::uint64_t blocks_found = 0;  // since the node started

@@ -27,7 +27,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(unofficial-sodium CONFIG QUIET)
 if(NOT unofficial-sodium_FOUND)
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
+  # Milestone 12: consensus depends on libsodium's exact Ed25519 verification (non-canonical S and
+  # small-order points rejected; see docs/consensus-review.md). 1.0.18 has those rules; older
+  # versions could accept signatures newer ones refuse, and split the chain.
+  pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium>=1.0.18)
   add_library(unofficial-sodium::sodium ALIAS PkgConfig::SODIUM)
 endif()
 find_package(GTest CONFIG REQUIRED)
@@ -41,6 +44,20 @@ if(MSVC)
   add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 else()
   add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 12: -DBOUND_SANITIZE=address,undefined (GCC or Clang) builds everything with those
+# sanitizers, so the tests stop at the first memory error or undefined behaviour. CI runs that.
+set(BOUND_SANITIZE "" CACHE STRING "Sanitizers to build with (GCC or Clang), e.g. address,undefined")
+if(BOUND_SANITIZE)
+  add_compile_options(-fsanitize=${BOUND_SANITIZE} -fno-omit-frame-pointer -fno-sanitize-recover=all)
+  add_link_options(-fsanitize=${BOUND_SANITIZE})
+endif()
+# -DBOUND_FUZZ=libfuzzer (clang): every library is built with libFuzzer's coverage
+# instrumentation, so the fuzzer sees which paths through the node an input reaches.
+set(BOUND_FUZZ "" CACHE STRING "libfuzzer: build bound_fuzz for clang's libFuzzer")
+if(BOUND_FUZZ STREQUAL "libfuzzer")
+  add_compile_options(-fsanitize=fuzzer-no-link)
 endif()
 
 # Everything except main() lives in bound_core, so the tests link the same code boundd runs.
@@ -176,6 +193,19 @@ target_compile_definitions(bound_tests PRIVATE BOUND_TEST_DATA_DIR="${CMAKE_SOUR
 
 include(GoogleTest)
 gtest_discover_tests(bound_tests DISCOVERY_MODE PRE_TEST)
+
+# Milestone 12: the fuzz targets (fuzz/fuzz.h). -DBOUND_FUZZ=libfuzzer builds them for clang's
+# libFuzzer (coverage-guided; CI runs each for a while); otherwise bound_fuzz mutates seeds itself,
+# and ctest runs every target briefly.
+add_executable(bound_fuzz fuzz/main.cpp fuzz/targets.cpp fuzz/target_peer.cpp)
+target_include_directories(bound_fuzz PRIVATE .)
+target_link_libraries(bound_fuzz PRIVATE bound_core)
+if(BOUND_FUZZ STREQUAL "libfuzzer")
+  target_compile_definitions(bound_fuzz PRIVATE BOUND_LIBFUZZER)
+  target_link_options(bound_fuzz PRIVATE -fsanitize=fuzzer)
+else()
+  add_test(NAME fuzz_targets COMMAND bound_fuzz all --runs 300)
+endif()
 
 # Milestone 9: bound-qt, the desktop wallet. Everything but main() is in bound_gui, for its tests.
 if(BOUND_GUI)

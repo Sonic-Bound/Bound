@@ -1,4 +1,5 @@
-# Builds BOUND on Linux and runs every test, including the wallet app's (drawn off screen).
+# Every push and pull request: BOUND built and tested on Linux and Windows, then again under the
+# sanitizers, and each fuzz target run for a while.
 name: CI
 
 on:
@@ -7,8 +8,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  LINUX_PACKAGES: >-
+    build-essential cmake ninja-build pkg-config libsodium-dev libleveldb-dev libsnappy-dev
+    nlohmann-json3-dev libgtest-dev
+
 jobs:
   linux:
+    name: Linux (GCC, with the wallet app)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -16,11 +23,111 @@ jobs:
       - name: Install the dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config libsodium-dev libleveldb-dev \
-                                  libsnappy-dev nlohmann-json3-dev libgtest-dev qt6-base-dev qt6-qpa-plugins
+          sudo apt-get install -y $LINUX_PACKAGES qt6-base-dev qt6-qpa-plugins
       - name: Configure
         run: cmake --preset linux
       - name: Build
         run: cmake --build --preset linux-debug
       - name: Test
         run: ctest --preset linux-debug
+
+  # Milestone 12: memory errors, undefined behaviour and leaks stop the tests at once.
+  sanitizers:
+    name: AddressSanitizer + UndefinedBehaviorSanitizer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES
+      - name: Build
+        run: |
+          cmake -S . -B build/asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBOUND_GUI=OFF -DBOUND_SANITIZE=address,undefined
+          cmake --build build/asan
+      - name: Test
+        run: ctest --test-dir build/asan --output-on-failure
+
+  # Milestone 12: data races between the node's threads (miner, seed lookups, the wallet app's RPC).
+  threads:
+    name: ThreadSanitizer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES
+      - name: Build
+        run: |
+          cmake -S . -B build/tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBOUND_GUI=OFF -DBOUND_SANITIZE=thread
+          cmake --build build/tsan --target bound_tests
+      - name: Test
+        # Recent kernels randomise memory too widely for TSan's layout; setarch -R turns that off.
+        run: TSAN_OPTIONS=halt_on_error=1 setarch "$(uname -m)" -R build/tsan/bound_tests --gtest_brief=1
+
+  # Milestone 12: coverage-guided fuzzing (clang's libFuzzer) of everything that reads outside
+  # input, with ASan and UBSan watching. A finding fails the job and is kept as an artifact.
+  fuzz:
+    name: Fuzzing (libFuzzer)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_PACKAGES clang libclang-rt-18-dev
+      - name: Build
+        run: |
+          CC=clang CXX=clang++ cmake -S . -B build/fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBOUND_GUI=OFF \
+            -DBOUND_FUZZ=libfuzzer -DBOUND_SANITIZE=address,undefined
+          cmake --build build/fuzz --target bound_fuzz
+      - name: Fuzz each target for 45 seconds
+        run: |
+          cd build/fuzz
+          mkdir -p findings
+          for target in $(FUZZ=list ./bound_fuzz); do
+            mkdir -p corpus/$target
+            FUZZ=$target FUZZ_WRITE_SEEDS=corpus/$target ./bound_fuzz
+            echo "::group::$target"
+            # pipefail (GitHub's default for bash) fails the step if the fuzzer finds anything.
+            FUZZ=$target ./bound_fuzz corpus/$target -max_total_time=45 -timeout=10 -rss_limit_mb=2048 \
+              -artifact_prefix=findings/$target- 2>&1 | tail -5
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-findings
+          path: build/fuzz/findings
+
+  windows:
+    name: Windows (MSVC)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - name: Restore the vcpkg package cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
+      - name: Configure
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          cmake --preset msvc
+      - name: Build
+        run: cmake --build --preset debug
+      - name: Test
+        run: ctest --preset debug

@@ -659,6 +659,7 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
             {"status", !on ? "off" : m->paused ? "waiting for the initial sync" : "mining"},
             {"address", on ? json(address_of(*m->payee, params)) : json(nullptr)},
             {"hashespersec", on ? m->hashes_per_second : 0.0},
+            {"threads", m != nullptr && m->threads != 0 ? m->threads : BackgroundMiner::default_threads()},
             {"blocksfound", m != nullptr ? m->blocks_found : 0},
             {"blocks", node.chain.height()},
             {"difficulty", difficulty(next_work_required(node.chain.tip(), params), params)},
@@ -667,14 +668,20 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
     };
     t.add("getmininginfo", "", "Whether this node mines in the background (setmining), how fast, and the next block's difficulty.", 0, 0,
           [mining_info](const RpcParams&) -> json { return mining_info(); });
-    t.add("setmining", "<true|false> [address]",
-          "Starts mining in the background, paying the address (by default a new one from the wallet), or stops. The node "
-          "keeps working meanwhile; mined blocks are announced like any other.",
-          1, 2, [&node, mining_info](const RpcParams& p) -> json {
+    t.add("setmining", "<true|false> [address] [threads]",
+          "Starts mining in the background, paying the address (by default a new one from the wallet), or stops. threads: "
+          "how many of the processor's threads to use (by default all but one). The node keeps working meanwhile; mined "
+          "blocks are announced like any other.",
+          1, 3, [&node, mining_info](const RpcParams& p) -> json {
               if (node.mining == nullptr) throw RpcError(rpc_error::kMisc, "background mining isn't available here");
               if (!p.boolean(0)) {
                   node.mining->payee.reset();
                   return mining_info();
+              }
+              if (p.has(2)) {
+                  const std::int64_t threads = p.integer(2);
+                  if (threads < 1 || threads > 1024) throw RpcError(rpc_error::kInvalidParameter, "threads must be from 1 to 1024");
+                  node.mining->threads = static_cast<unsigned>(threads);
               }
               if (p.has(1)) {
                   node.mining->payee = parse_address(p.str(1), node.chain.params());

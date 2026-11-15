@@ -48,12 +48,14 @@ std::optional<Block> make_block_template(const Chainstate& chain, const PublicKe
 // return if the target is so hard that no hash ever meets it.
 Block mine_block(Block block, const uint256& pow_limit);
 
-// Milestone 6: mines on a thread of its own while the node runs. Templates come from the thread
-// that owns the chainstate, and solved blocks go back to it; this class never touches the chain.
+// Milestone 6: mines on threads of its own while the node runs (one until milestone 12, any number
+// since). Templates come from the thread that owns the chainstate, and solved blocks go back to it;
+// this class never touches the chain.
 class BackgroundMiner {
 public:
-    explicit BackgroundMiner(const uint256& pow_limit);
-    ~BackgroundMiner();  // stops the thread
+    explicit BackgroundMiner(const uint256& pow_limit, unsigned threads = 1);
+    ~BackgroundMiner();  // stops the threads
+    static unsigned default_threads();  // every core but one, which the node keeps
     BackgroundMiner(const BackgroundMiner&) = delete;
     BackgroundMiner& operator=(const BackgroundMiner&) = delete;
 
@@ -62,10 +64,11 @@ public:
     void set_work(std::optional<Block> block);
     // A block solved since the last call, if any. After solving, the miner waits for new work.
     std::optional<Block> take_solved();
-    std::uint64_t hashes() const { return hashes_; }  // tried so far, for a hash rate
+    std::uint64_t hashes() const { return hashes_; }  // tried so far, by every thread, for a hash rate
+    unsigned threads() const { return static_cast<unsigned>(threads_.size()); }
 
 private:
-    void run(std::stop_token stop);
+    void run(std::stop_token stop, unsigned index, unsigned count);
 
     uint256 pow_limit_;
     std::mutex mutex_;
@@ -73,8 +76,9 @@ private:
     std::optional<Block> work_;
     std::uint64_t generation_ = 0;  // bumped by set_work
     std::optional<Block> solved_;
+    std::uint64_t solved_generation_ = 0;  // the generation solved_ (or a block already taken) solves
     std::atomic<std::uint64_t> hashes_{0};
-    std::jthread thread_;  // last, so it starts after, and stops before, everything above
+    std::vector<std::jthread> threads_;  // last, so they start after, and stop before, everything above
 };
 
 }  // namespace bound

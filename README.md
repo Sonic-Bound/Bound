@@ -48,7 +48,10 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
   payments, mining at the press of a button, the peers and an RPC console.
 - **Defences.** A peer that breaks a rule is turned away for a day, and operators can ban
   addresses. Floods of low-work headers, unrequested blocks, requests or addresses can't stall or
-  swamp a node.
+  swamp a node. Every push is tested under AddressSanitizer, UndefinedBehaviorSanitizer and
+  ThreadSanitizer, and everything that reads outside input is fuzzed
+  ([milestone 12](docs/milestone-12.md), [consensus review](docs/consensus-review.md)). Found a
+  vulnerability? See [SECURITY.md](SECURITY.md).
 - **Infrastructure.** It comes with a DNS seeder (`bound-seeder`), a web block explorer
   (`bound-explorer`), JSON-RPC with `bound-cli`, and systemd units for servers.
 
@@ -163,7 +166,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 9 | Desktop wallet (`bound-qt`), background mining by RPC | ✅ [notes](docs/milestone-9.md) |
 | 10 | Networks: mainnet, testnet and regtest side by side | ✅ [notes](docs/milestone-10.md) |
 | 11 | ASERT difficulty for mainnet, checked against Bitcoin Cash's test vectors | ✅ [notes](docs/milestone-11.md) |
-| 12–15 | Hardening, releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
+| 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
+| 13–15 | Releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout
 
