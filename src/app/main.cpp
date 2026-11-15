@@ -217,7 +217,9 @@ int cmd_info(const std::filesystem::path& datadir) {
     const Chainstate chain(p, data.db, data.blocks);
     const BlockIndex& tip = chain.tip();
     const int next_retarget = (tip.height / p.retarget_interval + 1) * p.retarget_interval;
-    const std::string retarget = p.pow_no_retargeting ? "fixed" : std::format("retarget at #{}", next_retarget);
+    const std::string retarget = p.pow_no_retargeting  ? std::string("fixed")
+                                 : p.asert_half_life > 0 ? std::string("adjusted every block (ASERT)")
+                                                         : std::format("retarget at #{}", next_retarget);
     std::cout << std::format("data directory   {}\n", datadir.string())
               << std::format("network          {}{}\n", p.network_name, p.launched ? "" : " (not launched: a provisional genesis)")
               << std::format("height           {}\n", tip.height)

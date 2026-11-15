@@ -72,6 +72,65 @@ std::uint32_t retarget(std::uint32_t bits, std::int64_t actual_timespan, std::in
     return compact_from_target(target->to_uint256());
 }
 
+// Milestone 11. The specification's CalculateASERT, line for line, except where it multiplies the
+// anchor target by the factor in 256 bits: here that product is formed and scaled in one exact
+// mul_div step, so it can't overflow whatever the pow_limit. Where the specification applies, the
+// two agree exactly: floor(x / 2^a / 2^b) == floor(x / 2^(a + b)), and mul_div is exact.
+arith_uint256 asert_target(const arith_uint256& anchor_target, std::int64_t time_diff, std::int64_t height_diff,
+                           std::int64_t spacing, std::int64_t half_life, const arith_uint256& pow_limit) {
+    if (anchor_target == 0 || anchor_target > pow_limit) throw std::invalid_argument("asert: anchor target out of range");
+    if (height_diff < 0 || spacing <= 0 || half_life <= 0) throw std::invalid_argument("asert: bad parameters");
+    constexpr std::int64_t kLagLimit = std::int64_t{1} << 47;
+    if (height_diff > kLagLimit / spacing) throw std::invalid_argument("asert: height difference too large");
+    const std::int64_t lag = time_diff - spacing * height_diff;  // seconds behind the schedule
+    if (lag <= -kLagLimit || lag >= kLagLimit) throw std::invalid_argument("asert: too far off schedule");
+
+    // The exponent in 1/65536ths: (time_diff - spacing * (height_diff + 1)) / half_life, the
+    // division truncating toward zero as the specification's C++ does.
+    const std::int64_t exponent = ((lag - spacing) * 65536) / half_life;
+    // Its integer part, rounded toward minus infinity (an arithmetic shift, standard since C++20),
+    // and its fractional part in [0, 1).
+    std::int64_t shifts = exponent >> 16;
+    const auto frac = static_cast<std::uint16_t>(exponent);
+    // 65536 * 2^(frac / 65536), by the specification's cubic (error under 0.013%).
+    const std::uint64_t f = frac;
+    const auto factor = static_cast<std::uint32_t>(
+        65536 + ((195766423245049ULL * f + 971821376ULL * f * f + 5127ULL * f * f * f + (1ULL << 47)) >> 48));
+
+    // anchor_target * factor * 2^(shifts - 16), rounded down. nullopt: beyond 256 bits, so far
+    // above pow_limit that the clamp below applies.
+    shifts -= 16;
+    std::optional<arith_uint256> next;
+    if (shifts >= 0) {
+        next = mul_div(anchor_target, factor, 1);
+        if (next) {
+            const auto up = static_cast<unsigned>(std::min<std::int64_t>(shifts, 256));
+            const arith_uint256 shifted = *next << up;
+            if ((shifted >> up) != *next) {
+                next.reset();  // the shift lost high bits
+            } else {
+                next = shifted;
+            }
+        }
+    } else {
+        const std::int64_t down = -shifts;
+        if (down <= 31) {
+            next = mul_div(anchor_target, factor, std::uint32_t{1} << down);
+        } else {
+            next = mul_div(anchor_target, factor, std::uint32_t{1} << 31);
+            if (next) *next >>= static_cast<unsigned>(std::min<std::int64_t>(down - 31, 256));
+        }
+    }
+
+    arith_uint256 target = next ? *next : pow_limit;
+    if (target == 0) {
+        target = 1;  // 0 isn't a valid target, but 1 is
+    } else if (target > pow_limit) {
+        target = pow_limit;
+    }
+    return target;
+}
+
 std::uint32_t next_work_required(const BlockIndex& parent, const ConsensusParams& params) {
     return next_work_required(
         parent.height, parent.header.bits, parent.header.time,
@@ -81,6 +140,15 @@ std::uint32_t next_work_required(const BlockIndex& parent, const ConsensusParams
 std::uint32_t next_work_required(int parent_height, std::uint32_t parent_bits, std::int64_t parent_time,
                                  const std::function<std::int64_t(int)>& time_at, const ConsensusParams& params) {
     if (params.pow_no_retargeting) return parent_bits;  // regtest
+    if (params.asert_half_life > 0) {
+        // Milestone 11 (mainnet). The anchor is the genesis block: it has no parent, so its own
+        // time stands in for its parent's, as the specification has it for a genesis anchor.
+        const arith_uint256 anchor(target_from_compact(params.genesis.bits).value());
+        const arith_uint256 target =
+            asert_target(anchor, parent_time - std::int64_t{params.genesis.time}, parent_height, params.target_spacing,
+                         params.asert_half_life, arith_uint256(params.pow_limit));
+        return compact_from_target(target.to_uint256());
+    }
     const int interval = params.retarget_interval;
     if ((parent_height + 1) % interval != 0) return parent_bits;
 

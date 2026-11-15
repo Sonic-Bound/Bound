@@ -66,7 +66,10 @@ ConsensusParams make_mainnet() {
     p.network_name = "mainnet";
     p.launched = false;  // the genesis below is provisional: launch day mines the real one
 
-    p.pow_limit_bits = 0x1f00ffff;  // TODO(launch): an initial difficulty that fits the launch hash rate
+    // The easiest difficulty, as testnet's: about 65,000 hashes a block. ASERT can fall this far if
+    // the hash rate collapses, so the chain never stalls. Where it starts is the genesis block's
+    // bits (equal for this provisional genesis); launch day sets those to fit the hash rate then.
+    p.pow_limit_bits = 0x1f00ffff;
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;
@@ -77,7 +80,10 @@ ConsensusParams make_mainnet() {
     p.max_block_size = 1'000'000;
     p.address_version = {0x46, 0xfb};  // every address starts with 'B' (52 characters)
     p.coinbase_maturity = 100;
-    p.retarget_interval = 2016;  // TODO(milestone 11): ASERT, every block, replaces this
+    // Milestone 11 (the project owner's choice): ASERT sets every block's difficulty, with Bitcoin
+    // Cash's half-life of 2 days. The retarget interval below isn't used.
+    p.asert_half_life = 2 * 24 * 60 * 60;
+    p.retarget_interval = 2016;
 
     p.message_start = {0xd6, 0xb3, 0xe8, 0xf7};  // high bits set, as testnet's (see there)
     p.default_port = 7333;

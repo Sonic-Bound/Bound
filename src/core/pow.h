@@ -41,10 +41,28 @@ arith_uint256 block_proof(std::uint32_t bits);
 std::uint32_t retarget(std::uint32_t bits, std::int64_t actual_timespan, std::int64_t expected_timespan,
                        const uint256& pow_limit);
 
-// The bits a block on top of `parent` must have. The difficulty only changes at the start of each
-// period of params.retarget_interval blocks (heights that are multiples of it); other blocks copy
-// their parent's bits. A retarget compares how long the last period took, from the last block of
-// the period before it (genesis, for the first one) to `parent`, with target_spacing per block.
+// Milestone 11: aserti3-2d, Bitcoin Cash's difficulty rule (the November 2020 specification),
+// computing in 16-bit fixed point:
+//   target = anchor_target * 2^((time_diff - spacing * (height_diff + 1)) / half_life)
+// where time_diff is the parent's time minus the anchor's parent's (the anchor's own when it's the
+// genesis), and height_diff is the parent's height minus the anchor's. Clamped to [1, pow_limit].
+//
+// It gives exactly the specification's result wherever the specification applies (pow_limit below
+// 2^224; Bitcoin Cash's test vectors check that), and stays exact for an easier pow_limit, where
+// the specification's own arithmetic would overflow: anchor_target * factor is multiplied and
+// divided in one exact step (mul_div) instead of in 256 bits.
+// Throws std::invalid_argument unless 0 < anchor_target <= pow_limit, height_diff >= 0,
+// spacing > 0, half_life > 0 and |time_diff - spacing * height_diff| < 2^47 (as the spec asserts).
+arith_uint256 asert_target(const arith_uint256& anchor_target, std::int64_t time_diff, std::int64_t height_diff,
+                           std::int64_t spacing, std::int64_t half_life, const arith_uint256& pow_limit);
+
+// The bits a block on top of `parent` must have.
+//   - With params.asert_half_life set (mainnet): asert_target, anchored at the genesis block.
+//   - Otherwise (testnet): the difficulty only changes at the start of each period of
+//     params.retarget_interval blocks (heights that are multiples of it); other blocks copy their
+//     parent's bits. A retarget compares how long the last period took, from the last block of
+//     the period before it (genesis, for the first one) to `parent`, with target_spacing per block.
+//   - With params.pow_no_retargeting (regtest): the parent's bits.
 std::uint32_t next_work_required(const BlockIndex& parent, const ConsensusParams& params);
 // The same rule from plain values, for headers that aren't in the block tree (headers presync).
 // time_at(h) gives the time of the parent's ancestor at height h; it's only called when a

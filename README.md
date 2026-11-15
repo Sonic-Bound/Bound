@@ -73,7 +73,7 @@ and each network keeps its chain in its own data directory.
 | Block time | 60 seconds | 10 minutes | 10 minutes |
 | Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 210,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
 | Supply | 20,999,999.727 BOUND | 20,999,999.9769 BOUND, no premine | |
-| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT, every block (coming in milestone 11) | fixed and trivial: any CPU, instantly |
+| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life | fixed and trivial: any CPU, instantly |
 | Addresses | start with `9` (51 characters) | start with `B` (52 characters) | start with `9` |
 | Ports | P2P 18333, RPC 18332 | P2P 7333, RPC 7332 | P2P 18544, RPC 18543 |
 
@@ -162,7 +162,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 8 | Public testnet: seeds and a DNS seeder, block explorer, Linux, home nodes | ✅ [notes](docs/milestone-8.md) |
 | 9 | Desktop wallet (`bound-qt`), background mining by RPC | ✅ [notes](docs/milestone-9.md) |
 | 10 | Networks: mainnet, testnet and regtest side by side | ✅ [notes](docs/milestone-10.md) |
-| 11–15 | ASERT difficulty, hardening, releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
+| 11 | ASERT difficulty for mainnet, checked against Bitcoin Cash's test vectors | ✅ [notes](docs/milestone-11.md) |
+| 12–15 | Hardening, releases, launch infrastructure, mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout
 

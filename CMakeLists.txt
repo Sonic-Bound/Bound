@@ -167,8 +167,12 @@ add_executable(bound_tests
   tests/test_seeder.cpp
   # milestone 10
   tests/test_networks.cpp
+  # milestone 11
+  tests/test_asert.cpp
 )
 target_link_libraries(bound_tests PRIVATE bound_core GTest::gtest GTest::gtest_main)
+# Milestone 11: test vectors read at run time (tests/data).
+target_compile_definitions(bound_tests PRIVATE BOUND_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data")
 
 include(GoogleTest)
 gtest_discover_tests(bound_tests DISCOVERY_MODE PRE_TEST)

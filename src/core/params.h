@@ -58,6 +58,11 @@ struct ConsensusParams {
     int retarget_interval = 0;  // blocks per difficulty period; see next_work_required
     // Milestone 10: every block keeps its parent's difficulty (regtest, for tests on one machine).
     bool pow_no_retargeting = false;
+    // Milestone 11: when set, ASERT (Bitcoin Cash's aserti3-2d) sets every block's difficulty
+    // instead of the retarget above: the target doubles for every half-life the chain falls behind
+    // its schedule (genesis time + target_spacing per block) and halves for every one it runs
+    // ahead. The genesis block is the anchor. 0: the retarget rule.
+    std::int64_t asert_half_life = 0;
 
     // Milestone 6: the peer-to-peer network. Not consensus rules, but they differ per network too.
     std::array<std::uint8_t, 4> message_start{};  // the first 4 bytes of every P2P message
