@@ -199,7 +199,7 @@ TEST(WalletApp, UsesANodeAlreadyRunning) {
 }
 
 int main(int argc, char** argv) {
-    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", BOUND_TEST_PLATFORM);
     QApplication app(argc, argv);
     apply_style(app);
     ::testing::InitGoogleTest(&argc, argv);

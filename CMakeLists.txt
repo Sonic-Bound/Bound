@@ -203,16 +203,26 @@ if(BOUND_GUI AND Qt6_FOUND)
   add_executable(bound-qt WIN32 src/qt/main.cpp)
   target_link_libraries(bound-qt PRIVATE bound_gui)
 
+  # The tests draw without a screen: Qt's "offscreen" platform where there is one (Linux), else
+  # "minimal" (vcpkg's Qt on Windows has no offscreen plugin).
+  if(TARGET Qt6::QOffscreenIntegrationPlugin OR NOT WIN32)
+    set(bound_test_platform offscreen)
+  else()
+    set(bound_test_platform minimal)
+  endif()
   add_executable(bound_qt_tests tests/test_qt.cpp)
   target_link_libraries(bound_qt_tests PRIVATE bound_gui GTest::gtest)
-  gtest_discover_tests(bound_qt_tests DISCOVERY_MODE PRE_TEST PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+  target_compile_definitions(bound_qt_tests PRIVATE BOUND_TEST_PLATFORM="${bound_test_platform}")
+  gtest_discover_tests(bound_qt_tests DISCOVERY_MODE PRE_TEST PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=${bound_test_platform})
 
   # On Windows Qt looks for its platform plugin in platforms\ beside the program (vcpkg copies the
-  # DLLs, not the plugins). The tests draw off screen.
+  # DLLs, not the plugins).
   if(WIN32)
     set(bound_qt_plugins Qt6::QWindowsIntegrationPlugin)
     if(TARGET Qt6::QOffscreenIntegrationPlugin)
       list(APPEND bound_qt_plugins Qt6::QOffscreenIntegrationPlugin)
+    elseif(TARGET Qt6::QMinimalIntegrationPlugin)
+      list(APPEND bound_qt_plugins Qt6::QMinimalIntegrationPlugin)
     endif()
     foreach(target bound-qt bound_qt_tests)
       foreach(plugin ${bound_qt_plugins})
