@@ -40,7 +40,10 @@ ConsensusParams make_testnet() {
     // nodes, e.g. "seed.example.org" (the default port is assumed; "host:port" names another).
     // A node asks them when it knows too few peers; after that, peers come from address gossip.
     p.seeds = {
-        "136.86.151.244",  // the first always-on node (a cloud server, static address)
+        "seed.bound.sarl",   // DNS seeder on the Azure server: answers with nodes that are up
+        "seed2.bound.sarl",  // DNS seeder on the Google Cloud server
+        "136.86.151.244",    // the always-on nodes themselves (static addresses), in case DNS fails:
+        "104.211.211.39",    // Google Cloud (us-west1) and Microsoft Azure (South India)
     };
     // Raise this to the public chain's work once there is one (see docs/hardening.md).
     p.minimum_chain_work = 0;

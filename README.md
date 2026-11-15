@@ -74,9 +74,12 @@ Download it (above) or build it (below), then start the wallet app, or a node wi
     bound-qt                 # the desktop wallet: a full node with a window
     boundd node              # or a node on its own; talk to it with bound-cli
 
-A new node finds the network on its own: it asks the built-in seed, then learns about other
-nodes from its peers. To mine, open **Mining** in the app and press *Start mining*, or start the
-node with `boundd node --mine <address>`.
+A new node finds the network on its own: it asks the built-in seeds (`seed.bound.sarl`,
+`seed2.bound.sarl`), then learns about other nodes from its peers. To mine, open **Mining** in
+the app and press *Start mining*, or start the node with `boundd node --mine <address>`.
+
+**Explorer:** [explorer.bound.sarl](https://explorer.bound.sarl) shows the testnet's blocks,
+transactions and addresses.
 
 ## Networks
 
@@ -180,7 +183,7 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 11 | ASERT difficulty for mainnet, checked against Bitcoin Cash's test vectors | ✅ [notes](docs/milestone-11.md) |
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
 | 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
-| 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); the servers: in progress |
+| 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); servers: 2 of 3 up, [explorer](https://explorer.bound.sarl) and 2 DNS seeders live |
 | 15 | Mainnet launch | [road to mainnet](docs/mainnet-roadmap.md) |
 
 ## Layout

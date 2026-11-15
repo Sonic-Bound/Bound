@@ -166,10 +166,13 @@ The system's packages stand in for vcpkg; libsodium comes through pkg-config.
 
 ## Launching the public testnet
 
-Progress (2026-11-15): one always-on node runs on a cloud server, and `p.seeds` lists it.
+Progress (2026-11-15): two always-on nodes run, on Google Cloud and Microsoft Azure, with the
+DNS seeders `seed.bound.sarl` and `seed2.bound.sarl` and the explorer at
+https://explorer.bound.sarl, all set up with `bound-server` ([milestone 14](milestone-14.md)).
+`p.seeds` lists the seeders and both nodes.
 
 1. **Machines.** At least two always-on servers, each running `boundd` (unit in
-   `contrib/systemd`), with TCP 18333 open. One is up so far.
+   `contrib/systemd`), with TCP 18333 open. Two are up.
 2. **Seeds.**
    - Run `bound-seeder` on one or more of them, each with its DNS delegation.
    - Put the seed names in `params.cpp` (`p.seeds`), and also the nodes' own host names, which
