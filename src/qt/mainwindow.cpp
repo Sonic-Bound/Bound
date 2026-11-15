@@ -34,7 +34,7 @@ QWidget* brand(QWidget* parent) {
     layout->setContentsMargins(20, 22, 16, 18);
     layout->setSpacing(10);
     auto* mark = new QLabel(box);
-    mark->setPixmap(logo(34));
+    mark->setPixmap(white_mark(34));
     layout->addWidget(mark);
     auto* text = new QVBoxLayout;
     text->setSpacing(2);

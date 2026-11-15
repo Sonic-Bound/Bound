@@ -195,12 +195,16 @@ if(BOUND_GUI AND Qt6_FOUND)
     src/qt/network.cpp
     src/qt/console.cpp
     src/qt/mainwindow.cpp
+    src/qt/bound.qrc
   )
-  set_target_properties(bound_gui PROPERTIES AUTOMOC ON)
+  set_target_properties(bound_gui PROPERTIES AUTOMOC ON AUTORCC ON)
   target_link_libraries(bound_gui PUBLIC bound_core Qt6::Widgets)
   target_compile_definitions(bound_gui PRIVATE BOUND_VERSION="${PROJECT_VERSION}")
 
   add_executable(bound-qt WIN32 src/qt/main.cpp)
+  if(WIN32)
+    target_sources(bound-qt PRIVATE src/qt/bound.rc)  # the .exe's icon
+  endif()
   target_link_libraries(bound-qt PRIVATE bound_gui)
 
   # The tests draw without a screen: Qt's "offscreen" platform where there is one (Linux), else

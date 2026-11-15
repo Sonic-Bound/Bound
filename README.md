@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" width="96" alt="BOUND logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-white.png">
+    <img src="docs/logo.png" width="120" alt="BOUND logo">
+  </picture>
 </p>
 
 <h1 align="center">BOUND</h1>

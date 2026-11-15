@@ -33,7 +33,7 @@
 | `qt/mainwindow.*` | the window: sidebar, status bar, menus, a refresh every 2 s | `qt/bitcoingui.cpp` | `WalletApp.RunsANodeInsideAndShowsItsWallet` |
 | `qt/overview.cpp` … `qt/console.cpp` | the pages | `qt/overviewpage.cpp`, `sendcoinsdialog.cpp`, `rpcconsole.cpp`, … | ditto |
 | `qt/dialogs.*` | passphrase, create/restore, seed, transaction details, About | `askpassphrasedialog.cpp`, `transactiondescdialog.cpp` | |
-| `qt/style.*` | Fusion style in BOUND's colours (light or dark, as the system is), the logo drawn in code | | screenshots |
+| `qt/style.*`, `qt/bound.qrc`, `qt/bound.rc` | Fusion style in BOUND's colours (light or dark, as the system is); the logo and app icon compiled in, and the `.exe`'s icon | | screenshots |
 | `rpc/methods.cpp` | `setmining`, `getmininginfo`; `listtransactions` gains `address`, `getblockchaininfo` `time` | `getmininginfo` | `NodeRpcTest.MiningSwitchedOnAndOff`, `NodeRpcTest.TransactionsShowTheirAddress` |
 | `rpc/client.*` | `cli_param` (shared with `bound-cli`) and `split_words` for the console | `rpc/client.cpp` | `WalletApp.ConsoleWordsAreSplitLikeAShell` |
 

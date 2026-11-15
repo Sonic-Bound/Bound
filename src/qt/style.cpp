@@ -3,12 +3,13 @@
 #include <QApplication>
 #include <QFontDatabase>
 #include <QGuiApplication>
-#include <QLinearGradient>
-#include <QPainter>
-#include <QPainterPath>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QStyleHints>
+
+// The images in bound.qrc are compiled into this static library; this makes sure they're
+// registered (Q_INIT_RESOURCE has to be used outside any namespace).
+static void init_resources() { Q_INIT_RESOURCE(bound); }
 
 namespace bound::gui {
 
@@ -126,6 +127,7 @@ QProgressBar::chunk { background: %4; border-radius: 4px; }
 }  // namespace
 
 void apply_style(QApplication& app) {
+    init_resources();
     QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
     g_colors = make_colors(system_is_dark());
     QApplication::setPalette(make_palette(g_colors));
@@ -135,41 +137,24 @@ void apply_style(QApplication& app) {
 
 const Colors& colors() { return g_colors; }
 
-QPixmap logo(int size) {
-    QPixmap pixmap(size, size);
-    pixmap.fill(Qt::transparent);
-    QPainter p(&pixmap);
-    p.setRenderHint(QPainter::Antialiasing);
-    const qreal s = size;
+namespace {
 
-    QLinearGradient fill(0, 0, s, s);
-    fill.setColorAt(0, QColor("#748ffc"));
-    fill.setColorAt(1, QColor("#3b5bdb"));
-    p.setPen(Qt::NoPen);
-    p.setBrush(fill);
-    p.drawEllipse(QRectF(0, 0, s, s));
-
-    // A ring around the B: bound.
-    QPen ring(QColor(255, 255, 255, 220));
-    ring.setWidthF(s * 0.055);
-    p.setPen(ring);
-    p.setBrush(Qt::NoBrush);
-    p.drawEllipse(QRectF(s * 0.16, s * 0.16, s * 0.68, s * 0.68));
-
-    QFont font;
-    font.setBold(true);
-    font.setPixelSize(static_cast<int>(s * 0.42));
-    p.setFont(font);
-    p.setPen(Qt::white);
-    p.drawText(QRectF(0, 0, s, s * 0.98), Qt::AlignCenter, QStringLiteral("B"));
+// An image from the app's resources (bound.qrc), `size` pixels on screen, sharp on high-DPI screens.
+QPixmap resource_image(const QString& name, int size) {
+    const qreal dpr = qApp != nullptr ? qApp->devicePixelRatio() : 1.0;
+    QPixmap pixmap = QPixmap(QStringLiteral(":/bound/") + name)
+                         .scaled(QSize(size, size) * dpr, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    pixmap.setDevicePixelRatio(dpr);
     return pixmap;
 }
 
-QIcon app_icon() {
-    QIcon icon;
-    for (const int size : {16, 24, 32, 48, 64, 128, 256}) icon.addPixmap(logo(size));
-    return icon;
-}
+}  // namespace
+
+QPixmap logo(int size) { return resource_image(QStringLiteral("icon.png"), size); }
+
+QPixmap white_mark(int size) { return resource_image(QStringLiteral("logo-white.png"), size); }
+
+QIcon app_icon() { return QIcon(QStringLiteral(":/bound/icon.png")); }
 
 QFont mono_font(int point_size) {
     QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);

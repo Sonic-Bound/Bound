@@ -1,7 +1,7 @@
 #pragma once
 
 // The wallet app's look: Qt's Fusion style with BOUND's colours, light or dark to match the
-// system, and the logo drawn in code (no image files to ship).
+// system, and the logo (compiled in from bound.qrc).
 
 #include <QColor>
 #include <QFont>
@@ -25,7 +25,8 @@ struct Colors {
 void apply_style(QApplication& app);
 const Colors& colors();
 
-QPixmap logo(int size);  // the round BOUND mark
+QPixmap logo(int size);        // the app icon: the white mark on navy, a rounded square
+QPixmap white_mark(int size);  // the mark alone, white, for dark backgrounds
 QIcon app_icon();
 QFont mono_font(int point_size = 0);  // 0: the application's size
 
