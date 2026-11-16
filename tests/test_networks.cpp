@@ -92,7 +92,11 @@ TEST(Networks, MainnetHasBitcoinsSchedule) {
     EXPECT_GE(block_proof(p.pow_limit_bits), arith_uint256(1) << 22);
     EXPECT_LT(block_proof(p.pow_limit_bits), (arith_uint256(1) << 22) + 100);
     EXPECT_EQ(p.pow_lines, kBoundHashLines);
-    EXPECT_FALSE(p.launched);  // until launch day mines the real genesis
+    EXPECT_TRUE(p.launched);  // since launch day
+    // Launch day: the genesis quotes that day's headline and is dated that day (16/Nov/2026, UTC).
+    EXPECT_GE(p.genesis.time, 1794787200u);
+    EXPECT_LT(p.genesis.time, 1794787200u + 24 * 60 * 60);
+    EXPECT_EQ(p.genesis_coinbase.outputs.at(0).amount, 50 * kCoin);
     EXPECT_TRUE(testnet_params().launched);
     EXPECT_EQ(total_supply(testnet_params()), Amount{2'099'999'972'700'000});  // unchanged
 }
@@ -145,13 +149,13 @@ TEST(Networks, ChosenOnTheCommandLine) {
     EXPECT_EQ(network_flag("--testnet"), Network::Testnet);
     EXPECT_EQ(network_flag("--regtest"), Network::Regtest);
     EXPECT_EQ(network_flag("--main"), std::nullopt);
-    EXPECT_EQ(kDefaultNetwork, Network::Testnet);  // until launch day
+    EXPECT_EQ(kDefaultNetwork, Network::Mainnet);  // since launch day
 
     std::vector<std::string_view> args{"--datadir", "x", "--regtest", "node", "--index"};
     EXPECT_EQ(take_network(args), Network::Regtest);
     EXPECT_EQ(args, (std::vector<std::string_view>{"--datadir", "x", "node", "--index"}));
     std::vector<std::string_view> none{"node"};
-    EXPECT_EQ(take_network(none), Network::Testnet);
+    EXPECT_EQ(take_network(none), Network::Mainnet);
     std::vector<std::string_view> same{"--mainnet", "--mainnet", "info"};
     EXPECT_EQ(take_network(same), Network::Mainnet);
     EXPECT_EQ(same, (std::vector<std::string_view>{"info"}));

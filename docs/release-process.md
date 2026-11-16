@@ -7,8 +7,8 @@ someone's own PC, so anyone can check that a download came from this repository'
 
 1. **Pick the version** and set it in one place, `project(bound VERSION ...)` in
    [CMakeLists.txt](../CMakeLists.txt). Everything else takes it from there: `--version`, the user
-   agent peers see, the Windows file properties and the package names. Until mainnet launches the
-   versions are 0.x, and GitHub marks them as pre-releases.
+   agent peers see, the Windows file properties and the package names. Before mainnet launched the
+   versions were 0.x, marked as pre-releases; from 1.0.0 they're full releases.
 2. **Write the release notes** in `docs/release-notes/v<version>.md`: what's new, what to know
    before upgrading. They become the release's description.
 3. **Try it** (optional, recommended): *Actions > Release > Run workflow*. That's a dry run: it

@@ -77,7 +77,7 @@ ConsensusParams make_testnet() {
 ConsensusParams make_mainnet() {
     ConsensusParams p;
     p.network_name = "mainnet";
-    p.launched = false;  // the genesis below is provisional: launch day mines the real one
+    p.launched = true;  // since launch day, 16/Nov/2026
 
     // Milestone 15 (the project owner's choice): difficulty 1 as Bitcoin has it, where the genesis
     // starts and the easiest the chain can ever get; ASERT makes it harder as miners join, and never
@@ -115,14 +115,20 @@ ConsensusParams make_mainnet() {
     };
     p.minimum_chain_work = 0;  // no chain yet: each release after launch raises it
 
-    p.genesis_coinbase = make_coinbase(0, 50 * kCoin, PublicKey{},
-                                       bytes_of("BOUND mainnet: a provisional genesis, replaced on launch day"));
+    // Launch day, 16/Nov/2026. The genesis quotes a headline from that day's front page of The
+    // Indian Express (the project owner's choice), so nobody can have mined mainnet before that day,
+    // as Bitcoin's genesis quotes The Times of 3 January 2009. Its reward pays a key nobody holds and
+    // never enters the UTXO set: no premine. Anyone can mine it again and get the same block:
+    // boundd --mainnet genesis "<the message>" 1794824661
+    p.genesis_coinbase = make_coinbase(
+        0, 50 * kCoin, PublicKey{},
+        bytes_of("BOUND 16/Nov/2026 12 NBFCs lose over Rs 65 crore in three months to cyber fraud in Delhi-NCR"));
     p.genesis.version = 1;
     p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
-    p.genesis.time = 1794700800;  // 2026-11-15 00:00:00 UTC
+    p.genesis.time = 1794824661;  // 2026-11-16 10:24:21 UTC
     p.genesis.bits = p.pow_limit_bits;
-    p.genesis.nonce = 8221119;  // milestone 16: mined again with BoundHash (`boundd --mainnet genesis`)
-    p.genesis_hash = uint256::from_hex("97bb43a7fd8099d9888a1f5a13b56438e02a4344a5f80d068d2075aa9282388e").value();
+    p.genesis.nonce = 651748;
+    p.genesis_hash = uint256::from_hex("be44789ea517f65d9c690a4690e45ac5189777ff1d34b1ced3d73c3c20674bad").value();
     return p;
 }
 

@@ -100,8 +100,9 @@ const ConsensusParams& testnet_params();
 const ConsensusParams& regtest_params();
 const ConsensusParams& params_for(Network network);
 
-// Until mainnet launches, a node without --mainnet, --testnet or --regtest joins the testnet.
-inline constexpr Network kDefaultNetwork = Network::Testnet;
+// Since launch day (16/Nov/2026), a node without --mainnet, --testnet or --regtest joins mainnet,
+// as Bitcoin's does.
+inline constexpr Network kDefaultNetwork = Network::Mainnet;
 
 // "mainnet", "testnet", "regtest": the name in the data directory's path and in the RPC.
 std::string_view network_name(Network network);

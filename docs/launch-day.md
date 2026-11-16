@@ -2,6 +2,10 @@
 
 How BOUND's mainnet starts: the way Bitcoin did.
 
+**Mainnet launched on 16 November 2026.** Its genesis is
+`be44789ea517f65d9c690a4690e45ac5189777ff1d34b1ced3d73c3c20674bad`, and its message quotes a headline from that day's front page
+of *The Indian Express*: *"BOUND 16/Nov/2026 12 NBFCs lose over Rs 65 crore in three months to cyber fraud in Delhi-NCR"*.
+
 | Bitcoin, January 2009 | BOUND |
 |---|---|
 | The genesis block quotes that day's *Times*: "Chancellor on brink of second bailout for banks". Nobody could have mined the chain before that day. | The genesis quotes a headline from launch day, mined that day. |

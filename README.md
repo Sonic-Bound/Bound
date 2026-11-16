@@ -17,14 +17,14 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/C%2B%2B-20-00599C.svg" alt="C++20">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg" alt="Windows and Linux">
-  <img src="https://img.shields.io/badge/network-testnet-orange.svg" alt="testnet">
+  <img src="https://img.shields.io/badge/mainnet-live-brightgreen.svg" alt="mainnet: live">
 </p>
 
 > [!NOTE]
-> BOUND runs as a **testnet**, whose coins have no value. **Mainnet is ready to launch**, the way
-> Bitcoin did: a genesis quoting that day's headline, no premine, difficulty 1. It's mined with
-> [BoundHash](docs/boundhash.md), BOUND's own proof of work, which Bitcoin's mining machines can't
-> compute. See the [road to mainnet](docs/mainnet-roadmap.md) and [launch day](docs/launch-day.md).
+> **Mainnet launched on 16 November 2026**, the way Bitcoin did: a genesis quoting that day's
+> headline, no premine, difficulty 1. It's mined with [BoundHash](docs/boundhash.md), BOUND's own
+> proof of work, which Bitcoin's mining machines can't compute. BOUND is young, experimental
+> software: use it at your own risk. See [launch day](docs/launch-day.md).
 
 <p align="center">
   <img src="docs/screenshots/wallet.png" width="780" alt="The BOUND wallet: balances, the network, recent transactions">
@@ -69,48 +69,47 @@ servers made every file from the tagged source: check one with
 `gh attestation verify <file> --repo Sonic-Bound/Bound`. Releases are made the way
 [docs/release-process.md](docs/release-process.md) describes.
 
-## Join the testnet
+## Join the network
 
 Download it (above) or build it (below), then start the wallet app, or a node without a window:
 
     bound-qt                 # the desktop wallet: a full node with a window
     boundd node              # or a node on its own; talk to it with bound-cli
 
-A new node finds the network on its own: it asks the built-in seeds (the always-on nodes), then
-learns about other nodes from its peers. To mine, open **Mining** in the app and press *Start
-mining*, or start the node with `boundd node --mine <address>`.
+Both join mainnet; add `--testnet` to try things on the testnet, whose coins have no value. A new
+node finds the network on its own: it asks the built-in seeds (the always-on nodes), then learns
+about other nodes from its peers. To mine, open **Mining** in the app and press *Start mining*, or
+start the node with `boundd node --mine <address>`.
 
-**Explorer:** [explorer.bound.sarl](https://explorer.bound.sarl) shows the testnet's blocks,
-transactions and addresses.
-
-The testnet started over on 0.11.0, with BoundHash. Nodes from before it can't join: upgrading moves
-the old chain and wallet aside (`old-chain-…` in the data directory) and syncs the new one.
+**Explorers:** [explorer.bound.sarl](https://explorer.bound.sarl) for mainnet,
+[testnet-explorer.bound.sarl](https://testnet-explorer.bound.sarl) for the testnet.
 
 ## Networks
 
-Every program takes `--testnet` (the default until mainnet launches), `--mainnet` or `--regtest`,
-and each network keeps its chain in its own data directory.
+Every program takes `--mainnet` (the default), `--testnet` or `--regtest`, and each network keeps
+its chain in its own data directory.
 
-| | Testnet (live) | Mainnet (not launched yet) | Regtest |
+| | Mainnet (live since 16/Nov/2026) | Testnet (live) | Regtest |
 |---|---|---|---|
-| Block time | 60 seconds | 10 minutes | 10 minutes |
-| Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 210,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
-| Supply | 20,999,999.727 BOUND | 20,999,999.9769 BOUND, no premine | |
+| Block time | 10 minutes | 60 seconds | 10 minutes |
+| Reward | 50 BOUND, halving every 210,000 blocks (~4 years) | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
+| Supply | 20,999,999.9769 BOUND, no premine | 20,999,999.727 BOUND | |
 | Proof of work | [BoundHash](docs/boundhash.md), 512 KiB per hash | BoundHash, 512 KiB per hash | BoundHash, 8 KiB per hash |
-| Difficulty | retargets daily (1,440 blocks), at most 4×; from ~65,000 hashes a block | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life, from difficulty 1 (2^22 hashes, a PC's quarter of an hour) and never below | fixed and trivial: any CPU, instantly |
-| Addresses | start with `9` (51 characters) | start with `B` (52 characters) | start with `9` |
-| Ports | P2P 18333, RPC 18332 | P2P 7333, RPC 7332 | P2P 18544, RPC 18543 |
+| Difficulty | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life, from difficulty 1 (2^22 hashes, a PC's quarter of an hour) and never below | retargets daily (1,440 blocks), at most 4×; from ~65,000 hashes a block | fixed and trivial: any CPU, instantly |
+| Addresses | start with `B` (52 characters) | start with `9` (51 characters) | start with `9` |
+| Ports | P2P 7333, RPC 7332 | P2P 18333, RPC 18332 | P2P 18544, RPC 18543 |
 
 Shared by all: 1 BOUND = 10<sup>8</sup> units; mined coins can be spent after 100 blocks; blocks of
 at most 1 MB; timestamps at most 2 hours ahead; RPC on 127.0.0.1 only. Relay policy: at least 1 unit
 per byte in fees, no outputs under 420 units, full RBF, at most 25 unconfirmed ancestors or
 descendants.
 
-The testnet's genesis is `019fd113f42b4265bd706686e723bb46282772e655334b9c024f5c960e7ae8d1`, with
-the message *"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*. Block ids
-are SHA-256d of the header, as Bitcoin's; the proof of work is a separate number, its BoundHash.
-Mainnet's genesis is a placeholder until launch day: a node on it warns that its coins will be
-thrown away.
+Mainnet's genesis is `be44789ea517f65d9c690a4690e45ac5189777ff1d34b1ced3d73c3c20674bad`, mined on launch day. Its message
+quotes a headline from that day's front page of *The Indian Express*:
+*"BOUND 16/Nov/2026 12 NBFCs lose over Rs 65 crore in three months to cyber fraud in Delhi-NCR"*.
+The testnet's is `019fd113f42b4265bd706686e723bb46282772e655334b9c024f5c960e7ae8d1`, with the message
+*"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*. Block ids are SHA-256d
+of the header, as Bitcoin's; the proof of work is a separate number, its BoundHash.
 
 ## Build
 
@@ -169,8 +168,9 @@ More of the node:
     bound-seeder --host <seed name> --ns <this machine's name> --node <a node>
     boundd demo                             # in memory: mine, pay, lose it to a reorg, get it back
 
-The chain is kept in `%APPDATA%\BOUND\testnet` on Windows and `~/.bound/testnet` on Linux, or
-wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `bound-explorer`.
+The chain is kept in `%APPDATA%\BOUND\mainnet` on Windows and `~/.bound/mainnet` on Linux
+(`testnet` in place of `mainnet` with `--testnet`), or wherever `--datadir` points. Give the same
+one to `bound-cli`, `bound-qt` and `bound-explorer`.
 
 ## Roadmap
 
@@ -191,7 +191,7 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
 | 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
 | 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); servers: 2 of 3 up, [explorer](https://explorer.bound.sarl) and 2 DNS seeders live |
-| 15 | Mainnet launch: difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | ready ✅ [notes](docs/milestone-15.md); the day: [runbook](docs/launch-day.md) |
+| 15 | Mainnet launch: difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | launched 16/Nov/2026 ✅ [notes](docs/milestone-15.md), [launch day](docs/launch-day.md) |
 | 16 | BoundHash: BOUND's own memory-hard proof of work; the testnet started over on it | ✅ [notes](docs/milestone-16.md), [spec](docs/boundhash.md) |
 
 ## Layout

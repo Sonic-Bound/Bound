@@ -4,8 +4,8 @@ BOUND
 A proof-of-work cryptocurrency written from scratch in C++20.
 Source, documentation and releases: https://github.com/Sonic-Bound/Bound
 
-These programs run the BOUND testnet unless told otherwise, and testnet coins have no value.
-Mainnet hasn't launched yet: --mainnet runs a preview chain that will be thrown away.
+These programs run BOUND's mainnet unless told otherwise; --testnet joins the testnet, whose
+coins have no value. BOUND is young, experimental software: use it at your own risk.
 
 
 The programs
@@ -15,7 +15,7 @@ The programs
   bound-explorer  a block explorer for a node started with --index: http://127.0.0.1:8080
   bound-seeder    a DNS seeder, for those running the network's seeds
 
-  Each answers --version. Each takes --testnet (the default), --mainnet or --regtest, and
+  Each answers --version. Each takes --mainnet (the default), --testnet or --regtest, and
   --datadir <dir>.
 
 
@@ -30,12 +30,13 @@ Getting started
   aarch64 ones need 2.39 (Ubuntu 24.04, Debian 13, Raspberry Pi OS 13 or later).
 
   A server: sudo share/bound/bound-server install <this package>, then
-  sudo bound-server node testnet. It also sets up the explorer with HTTPS, a DNS seeder and
+  sudo bound-server node mainnet. It also sets up the explorer with HTTPS, a DNS seeder and
   health reports; bound-server with no arguments lists how.
 
-  The chain and the wallet are kept in %APPDATA%\BOUND\testnet on Windows and ~/.bound/testnet on
-  Linux. Write down the seed the wallet shows when it is made: it is the only way to get the
-  coins back. For others to reach your node, allow TCP port 18333 in the firewall.
+  The chain and the wallet are kept in %APPDATA%\BOUND\mainnet on Windows and ~/.bound/mainnet on
+  Linux (testnet in place of mainnet with --testnet). Write down the seed the wallet shows when it
+  is made: it is the only way to get the coins back. For others to reach your node, allow TCP port
+  7333 in the firewall (18333 for the testnet).
 
 
 Checking the download
