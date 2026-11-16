@@ -98,17 +98,17 @@ TEST_F(HeadersSyncTest, BrokenRulesAreReported) {
     };
     std::vector<BlockHeader> wrong_bits = headers_of(theirs, 1, 3);
     wrong_bits[2].bits = 0x207ffffe;
-    wrong_bits[2] = mine(wrong_bits[2], params.pow_limit).value();
+    wrong_bits[2] = mine(wrong_bits[2], params).value();
     check(wrong_bits, "wrong difficulty");
 
     BlockHeader old = theirs.at(1).header;
     old.time = kTestGenesisTime;  // not after genesis's
-    check({mine(old, params.pow_limit).value()}, "time too old");
+    check({mine(old, params).value()}, "time too old");
 
     check({theirs.at(1).header, theirs.at(3).header}, "headers that don't follow on from each other");
 
     BlockHeader no_work = theirs.at(1).header;
-    while (check_proof_of_work(no_work.hash(), no_work.bits, params.pow_limit)) ++no_work.nonce;
+    while (check_proof_of_work(no_work, params)) ++no_work.nonce;
     check({no_work}, "bad proof of work");
 }
 
@@ -155,7 +155,7 @@ TEST(HeadersSyncRetarget, ChecksDifficultyLikeTheTree) {
 
     std::vector<BlockHeader> stale = headers_of(fast, 1, 60);
     stale[59].bits = stale[58].bits;  // #60 keeping the old difficulty
-    stale[59] = mine(stale[59], params.pow_limit).value();
+    stale[59] = mine(stale[59], params).value();
     HeadersSync sync(fast.at(0), never, params, {}, 7, kTestNow);
     const HeadersSync::Result r = sync.process(stale, kTestNow);
     EXPECT_TRUE(r.invalid);

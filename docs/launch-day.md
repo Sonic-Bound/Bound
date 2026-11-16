@@ -7,7 +7,8 @@ How BOUND's mainnet starts: the way Bitcoin did.
 | The genesis block quotes that day's *Times*: "Chancellor on brink of second bailout for banks". Nobody could have mined the chain before that day. | The genesis quotes a headline from launch day, mined that day. |
 | The genesis reward can never be spent. | The same: it pays a key nobody holds, and never enters the UTXO set. |
 | No premine: Satoshi published the program, then mined like anyone could. | No premine. The release comes out, and block 1 is open to anyone who runs it. The project owner mines from the start, as Satoshi did. |
-| Difficulty 1, the easiest the chain ever allows. | Bitcoin's exact difficulty 1 (`0x1d00ffff`): about 4.3 billion hashes a block. |
+| Difficulty 1, the easiest the chain ever allows. | Difficulty 1 (`0x1e03ffff`): about 4.2 million hashes a block, a quarter of an hour for a PC on every core, as Bitcoin's difficulty 1 cost a PC. |
+| Mined on ordinary CPUs: no machine was built for SHA-256d yet. | [BoundHash](boundhash.md), BOUND's own proof of work: no machine is built for it, and Bitcoin's can't compute it. |
 
 Everything else is settled already ([the road to mainnet](mainnet-roadmap.md)): 10-minute blocks,
 50 BOUND halving every 210,000 blocks, ASERT difficulty, addresses starting with `B`.
@@ -18,6 +19,8 @@ Everything else is settled already ([the road to mainnet](mainnet-roadmap.md)): 
       addresses), `boundd genesis` to mine the genesis ([milestone 15](milestone-15.md)).
 - [x] Two always-on servers (Google Cloud, Microsoft Azure), the domain `bound.sarl`, the
       explorer, two DNS seeders, monitoring ([milestone 14](milestone-14.md)).
+- [x] BOUND's own proof of work, [BoundHash](boundhash.md) ([milestone 16](milestone-16.md)), and
+      the testnet running on it (release 0.11.0 on both servers).
 - [ ] A DNS record for testnet's explorer, which gives its name to mainnet's:
       `testnet-explorer` A `104.211.211.39` (DNS only).
 - [ ] **TCP 7333**, mainnet's port, open in both providers' firewalls (Google Cloud: VPC network >
@@ -35,8 +38,8 @@ parent, or of `main`):
 
     boundd --mainnet genesis "BOUND 20/Nov/2026 <the headline>" now
 
-It searches from the current second, about 4.3 billion hashes on average: a quarter of an hour at
-4.5 million a second, sometimes two or three times that. It prints the lines for
+It searches from the current second, about 4.2 million hashes on average: a quarter of an hour at
+4,500 a second (a 6-core PC), sometimes two or three times that. It prints the lines for
 `src/core/params.cpp`. Anyone can check them later: the same message and time always give the same
 block, on any machine.
 
@@ -82,8 +85,8 @@ And a new Healthchecks.io check for each server's mainnet node:
     sudo bound-server monitor mainnet https://hc-ping.com/<the new check>
 
 **6. Block 1.** Start the 1.0.0 wallet app: it opens on mainnet now. On *Mining*, press *Start
-mining*, with every thread. At difficulty 1 one PC finds a block every 16 minutes or so at 4.5
-million hashes a second; ASERT raises the difficulty as others join. Newly mined coins can be
+mining*. At difficulty 1 one PC finds a block every quarter of an hour or so at 4,500 hashes a
+second; ASERT raises the difficulty as others join. Newly mined coins can be
 spent after 100 blocks, about a day at that pace.
 
 **7. Tell people.** The GitHub release is the announcement: what BOUND is, how to download it,
@@ -96,12 +99,10 @@ Bitcointalk's *Announcements (Altcoins)* board, social media) points to it.
   Bitcoin's would.
 - **Each release raises `minimum_chain_work`** to the chain's work at the time, so a new node can't
   be fed a cheap fake chain.
-- **A risk Bitcoin didn't have in 2009.** BOUND uses Bitcoin's proof of work, SHA-256d, and today
-  machines built for it (ASICs) do 100 trillion hashes a second or more, millions of PCs' worth.
-  Someone who points one at BOUND would mine nearly every block while ASERT doubles the difficulty
-  to match, about 25 doublings of 288 blocks each: roughly 7,000 blocks (350,000 BOUND, 1.7% of all
-  there will ever be) over a few days. If they then stopped, the chain would be weeks ahead of its
-  schedule, and blocks would come rarely until ASERT halved the difficulty back down, once for every
-  two days without them. The usual defences change the coin itself (a different proof of work, or
-  merged mining with Bitcoin), so the launch accepts the risk: while the coins are worth nothing
-  there's little reason to do it, and a chain is only as safe as the work behind it.
+- **Bigger miners.** Until milestone 16 BOUND used Bitcoin's SHA-256d, and one of Bitcoin's mining
+  machines (100 trillion hashes a second, millions of PCs) could have taken roughly 7,000 early
+  blocks while ASERT caught up, then left the chain stalled for weeks. [BoundHash](boundhash.md)
+  closed that: those machines can't compute it. Someone could still bring far more than a PC (many
+  computers, or graphics cards once someone writes a miner for them). Then ASERT raises the difficulty
+  to match, every block, and lowers it again once for every two days the chain falls behind after
+  they leave. A chain is only as safe as the work behind it, so the more people mine, the safer it is.

@@ -11,8 +11,10 @@ ConsensusParams make_testnet() {
     ConsensusParams p;
     p.network_name = "testnet";
 
-    // Milestone 1: proof of work and time rules.
-    p.pow_limit_bits = 0x1f00ffff;  // about 65k hashes per block
+    // Milestone 1: proof of work and time rules. Milestone 16: the proof of work is BoundHash with
+    // mainnet's 512 KiB (pow_lines' default), and the easiest target still takes about 65k hashes:
+    // about 15 seconds for a 6-core PC.
+    p.pow_limit_bits = 0x1f00ffff;
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;
@@ -32,7 +34,10 @@ ConsensusParams make_testnet() {
 
     // Milestone 6. The magic is picked like Bitcoin's: every byte has its high bit set, so it's
     // never ASCII text and never valid UTF-8, and it's unlikely to appear inside other data.
-    p.message_start = {0xb0, 0xd4, 0xe7, 0xf5};
+    // Milestone 16: a new magic for the new chain (it was b0 d4 e7 f5), so nodes from before
+    // BoundHash and after it drop each other at the first message instead of trading headers that
+    // neither can accept. Bitcoin's testnets did the same at each reset.
+    p.message_start = {0xb3, 0xd8, 0xea, 0xf1};
     p.default_port = 18333;
     p.default_rpc_port = 18332;
 
@@ -46,12 +51,15 @@ ConsensusParams make_testnet() {
         "136.86.151.244",
         "104.211.211.39",
     };
-    // The public testnet's work at height 7,000 (block 0000020640a9...18c9, 2026-11-15): a fresh
-    // node won't store headers for a chain with less (docs/hardening.md). Raise it as the chain grows.
-    p.minimum_chain_work = 0x1'b201'b200;
+    // The least work a chain must have before a fresh node stores its headers (docs/hardening.md).
+    // Milestone 16 started the testnet over with BoundHash, so there's no chain to require yet: raise
+    // it as the new one grows.
+    p.minimum_chain_work = 0;
 
     // Genesis, mined by `boundd genesis`. It pays the all-zero key, which nobody can sign for
     // (a small-order point that libsodium rejects), and its output never enters the UTXO set.
+    // Milestone 16: the same block as before (the project owner kept 01/Nov/2026), mined again
+    // with BoundHash; only its nonce and hash changed.
     p.genesis_coinbase = make_coinbase(
         0, 5 * kCoin, PublicKey{},
         bytes_of("BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"));
@@ -59,8 +67,8 @@ ConsensusParams make_testnet() {
     p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
     p.genesis.time = 1793491200;  // 2026-11-01 00:00:00 UTC
     p.genesis.bits = p.pow_limit_bits;
-    p.genesis.nonce = 26584;
-    p.genesis_hash = uint256::from_hex("0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293").value();
+    p.genesis.nonce = 38222;
+    p.genesis_hash = uint256::from_hex("019fd113f42b4265bd706686e723bb46282772e655334b9c024f5c960e7ae8d1").value();
     return p;
 }
 
@@ -71,11 +79,13 @@ ConsensusParams make_mainnet() {
     p.network_name = "mainnet";
     p.launched = false;  // the genesis below is provisional: launch day mines the real one
 
-    // Milestone 15 (the project owner's choice): Bitcoin's exact difficulty 1, about 2^32 hashes a
-    // block, where the genesis starts and the easiest the chain can ever get, as on Bitcoin. One PC
-    // on every core (~4.5 million hashes a second) finds a block about every 16 minutes; ASERT makes
-    // it harder as miners join, and never easier than this.
-    p.pow_limit_bits = 0x1d00ffff;
+    // Milestone 15 (the project owner's choice): difficulty 1 as Bitcoin has it, where the genesis
+    // starts and the easiest the chain can ever get; ASERT makes it harder as miners join, and never
+    // easier. Milestone 16 (the project owner's choice): the proof of work is BoundHash, about a
+    // thousand times slower per hash than SHA-256d, so difficulty 1 is 2^22 hashes instead of
+    // Bitcoin's 2^32. That keeps what Bitcoin's difficulty 1 meant in practice: one PC on every core
+    // (a 6-core desktop does ~5,000 a second) finds a block in about a quarter of an hour.
+    p.pow_limit_bits = 0x1e03ffff;
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;
@@ -111,8 +121,8 @@ ConsensusParams make_mainnet() {
     p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
     p.genesis.time = 1794700800;  // 2026-11-15 00:00:00 UTC
     p.genesis.bits = p.pow_limit_bits;
-    p.genesis.nonce = 1352898970;  // milestone 15: mined again at difficulty 1 (`boundd --mainnet genesis`)
-    p.genesis_hash = uint256::from_hex("00000000ddae42ede41a3c1ebe9d394e0c79e89f16bf7dde003b2340bc0a1a9e").value();
+    p.genesis.nonce = 8221119;  // milestone 16: mined again with BoundHash (`boundd --mainnet genesis`)
+    p.genesis_hash = uint256::from_hex("97bb43a7fd8099d9888a1f5a13b56438e02a4344a5f80d068d2075aa9282388e").value();
     return p;
 }
 
@@ -124,6 +134,7 @@ ConsensusParams make_regtest() {
 
     p.pow_limit_bits = 0x207fffff;  // half of all hashes meet it
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
+    p.pow_lines = 64;  // milestone 16: BoundHash in 8 KiB, so tests mine thousands of blocks quickly
     p.pow_no_retargeting = true;
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;

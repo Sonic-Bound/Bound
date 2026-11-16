@@ -91,14 +91,14 @@ void mine_next(Chainstate& chain, const PublicKey& miner, std::vector<Transactio
     const auto start = std::chrono::steady_clock::now();
     std::optional<Block> tmpl = make_block_template(chain, miner, std::move(txs), static_cast<std::uint32_t>(unix_now()));
     if (!tmpl) throw std::runtime_error("a transaction for the block template is invalid");
-    const Block block = mine_block(std::move(*tmpl), chain.params().pow_limit);
+    const Block block = mine_block(std::move(*tmpl), chain.params());
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
     if (!chain.accept_block(block, unix_now()).accepted()) throw std::runtime_error("our own block was rejected");
     if (print) {
-        const double khs = seconds > 0 ? (block.header.nonce + 1.0) / seconds / 1000 : 0;
-        std::cout << std::format("  #{:<4} {}  nonce {:>10}  {:5.2f} s  {:6.0f} kH/s  difficulty {:.2f}  {} tx\n",
-                                 chain.height(), block.hash().to_hex(), block.header.nonce, seconds, khs,
+        const double hs = seconds > 0 ? (block.header.nonce + 1.0) / seconds : 0;
+        std::cout << std::format("  #{:<4} {}  nonce {:>10}  {:5.2f} s  {:7.0f} H/s  difficulty {:.2f}  {} tx\n",
+                                 chain.height(), block.hash().to_hex(), block.header.nonce, seconds, hs,
                                  difficulty(block.header.bits, chain.params()), block.txs.size());
     }
 }
@@ -283,20 +283,21 @@ int cmd_genesis(std::string_view message, std::uint32_t time) {
     };
     std::stop_source stop;
     std::int64_t reported = 0;
-    const std::optional<BlockHeader> header = mine_genesis(unmined->header, p.pow_limit, threads, stop.get_token(), [&](std::uint64_t hashes) {
+    const std::optional<BlockHeader> header = mine_genesis(unmined->header, p, threads, stop.get_token(), [&](std::uint64_t hashes) {
         if (g_interrupted) stop.request_stop();
         const std::int64_t s = seconds();
         if (s - reported < 10) return;
         reported = s;
-        std::cerr << std::format("  {:.2f} billion hashes in {} s, {:.2f} MH/s\n", static_cast<double>(hashes) / 1e9, s,
-                                 static_cast<double>(hashes) / 1e6 / static_cast<double>(s));
+        std::cerr << std::format("  {:.2f} million hashes in {} s, {:.0f} H/s\n", static_cast<double>(hashes) / 1e6, s,
+                                 static_cast<double>(hashes) / static_cast<double>(s));
     });
     if (!header) throw std::runtime_error("stopped before finding it");
 
     const uint256 hash = header->hash();
     std::cerr << std::format("Found in {} s\n", seconds());
     std::cout << std::format("{} genesis\n", p.network_name)
-              << std::format("  hash         {}\n", hash.to_hex())
+              << std::format("  hash         {}  (its id: SHA-256d)\n", hash.to_hex())
+              << std::format("  BoundHash    {}  (its proof of work)\n", pow_hash(*header, p).to_hex())
               << std::format("  merkle root  {}\n", header->merkle_root.to_hex())
               << std::format("  time         {} ({} UTC)\n", header->time, format_utc(header->time))
               << std::format("  bits         0x{:08x}\n", header->bits)

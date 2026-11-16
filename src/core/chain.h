@@ -14,7 +14,7 @@ namespace bound {
 enum class AcceptResult {
     Accepted,
     Duplicate,       // already in the tree
-    BadProofOfWork,  // check_proof_of_work(hash, bits, params.pow_limit) fails
+    BadProofOfWork,  // check_proof_of_work(header, params) fails
     UnknownParent,   // prev_hash isn't in the tree (yet)
     InvalidParent,   // the parent, or one of its ancestors, failed validation
     BadDifficulty,   // bits != next_work_required(parent)

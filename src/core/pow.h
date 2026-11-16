@@ -9,6 +9,7 @@
 
 namespace bound {
 
+struct BlockHeader;
 struct BlockIndex;
 struct ConsensusParams;
 
@@ -25,6 +26,14 @@ std::uint32_t compact_from_target(const uint256& target);
 
 // True iff bits decodes to a target t with 0 < t <= pow_limit, and hash <= t.
 bool check_proof_of_work(const uint256& hash, std::uint32_t bits, const uint256& pow_limit);
+
+// Milestone 16: the number a header's proof of work is: BoundHash of its 80 bytes, with the
+// network's scratchpad size. Not the block's id, which stays header.hash() (SHA-256d) as on
+// Litecoin: ids are needed everywhere and must be cheap, proof of work only where blocks enter.
+uint256 pow_hash(const BlockHeader& header, const ConsensusParams& params);
+// check_proof_of_work(pow_hash(header, params), header.bits, params.pow_limit), except that bits
+// outside (0, pow_limit] are turned away before any hashing, as BoundHash costs about a millisecond.
+bool check_proof_of_work(const BlockHeader& header, const ConsensusParams& params);
 
 // Milestone 4: work and difficulty adjustment.
 

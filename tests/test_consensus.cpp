@@ -144,7 +144,7 @@ ConsensusParams block_params() {
 // Optionally recomputes the merkle root, then mines the header.
 Block seal(Block b, const ConsensusParams& p, bool fix_merkle_root = true) {
     if (fix_merkle_root) b.header.merkle_root = b.compute_merkle_root();
-    b.header = mine(b.header, p.pow_limit).value();
+    b.header = mine(b.header, p).value();
     return b;
 }
 
@@ -169,14 +169,14 @@ TEST(CheckBlock, AcceptsAValidBlock) {
 TEST(CheckBlock, RejectsBadProofOfWork) {
     const ConsensusParams p = block_params();
     Block b = valid_block(p);
-    while (check_proof_of_work(b.hash(), b.header.bits, p.pow_limit)) ++b.header.nonce;
+    while (check_proof_of_work(b.header, p)) ++b.header.nonce;
     EXPECT_EQ(check_block(b, p), BlockCheck::BadProofOfWork);
 }
 
 TEST(CheckBlock, ChecksProofOfWorkFirst) {
     const ConsensusParams p = block_params();
     Block b = with_txs({});
-    while (check_proof_of_work(b.hash(), b.header.bits, p.pow_limit)) ++b.header.nonce;
+    while (check_proof_of_work(b.header, p)) ++b.header.nonce;
     EXPECT_EQ(check_block(b, p), BlockCheck::BadProofOfWork);  // not NoTransactions
 }
 

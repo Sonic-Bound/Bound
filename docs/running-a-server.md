@@ -52,7 +52,10 @@ It shows each network's height, how long ago the last block came, peers, and wha
 moves it to `boundd@testnet` on the same data directory, so nothing syncs again.
 
 **Upgrading** is `sudo bound-server install` again. It restarts what runs, on the new version, and
-keeps the last three versions: `sudo bound-server install 0.10.0` goes back.
+keeps the last three versions: `sudo bound-server install 0.10.0` goes back. A release that replaces
+a network's genesis (0.11.0 started the testnet over with BoundHash) makes the node move the old
+chain aside by itself, to `old-chain-<its genesis>` in the data directory, and sync the new one; the
+explorer follows. Going back to an older version after that starts its chain from scratch.
 
 ## The domain
 

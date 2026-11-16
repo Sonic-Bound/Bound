@@ -33,7 +33,7 @@ protected:
         Block block = on(parent, miner);
         block.txs[0].outputs[0].amount += 1;
         block.header.merkle_root = block.compute_merkle_root();
-        block.header = mine(block.header, params.pow_limit).value();
+        block.header = mine(block.header, params).value();
         return block;
     }
 

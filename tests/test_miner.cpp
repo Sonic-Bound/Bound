@@ -17,11 +17,13 @@ namespace {
 // About 1 in 256 hashes meets this target, so these tests run instantly even in Debug.
 constexpr std::uint32_t kEasyBits = 0x2000ffff;
 
-// The first two valid nonces for template_header(), computed independently (Python hashlib).
-constexpr std::uint32_t kFirstValid = 471;
-constexpr std::uint32_t kSecondValid = 635;
+// The first two valid nonces for template_header(), computed independently: BoundHash with 64
+// lines, by the Python reference implementation (contrib/boundhash/boundhash.py).
+constexpr std::uint32_t kFirstValid = 325;
+constexpr std::uint32_t kSecondValid = 432;
 
-uint256 pow_limit() { return target_from_compact(0x207fffff).value(); }
+// Regtest's pow limit and BoundHash size.
+const ConsensusParams& pow_params() { return regtest_params(); }
 
 BlockHeader template_header() {
     BlockHeader h;
@@ -36,10 +38,10 @@ BlockHeader template_header() {
 }  // namespace
 
 TEST(Miner, FindsTheFirstValidNonce) {
-    const std::optional<BlockHeader> mined = mine(template_header(), pow_limit());
+    const std::optional<BlockHeader> mined = mine(template_header(), pow_params());
     ASSERT_TRUE(mined.has_value());
     EXPECT_EQ(mined->nonce, kFirstValid);
-    EXPECT_TRUE(check_proof_of_work(mined->hash(), mined->bits, pow_limit()));
+    EXPECT_TRUE(check_proof_of_work(*mined, pow_params()));
 
     BlockHeader expected = template_header();
     expected.nonce = kFirstValid;
@@ -47,21 +49,21 @@ TEST(Miner, FindsTheFirstValidNonce) {
 }
 
 TEST(Miner, StartsAtStartNonce) {
-    const std::optional<BlockHeader> mined = mine(template_header(), pow_limit(), kFirstValid + 1);
+    const std::optional<BlockHeader> mined = mine(template_header(), pow_params(), kFirstValid + 1);
     ASSERT_TRUE(mined.has_value());
     EXPECT_EQ(mined->nonce, kSecondValid);
 }
 
 TEST(Miner, StopsAfterMaxTries) {
-    EXPECT_FALSE(mine(template_header(), pow_limit(), 0, kFirstValid).has_value());  // nonces 0..470
-    EXPECT_TRUE(mine(template_header(), pow_limit(), 0, kFirstValid + 1).has_value());
+    EXPECT_FALSE(mine(template_header(), pow_params(), 0, kFirstValid).has_value());  // nonces 0..324
+    EXPECT_TRUE(mine(template_header(), pow_params(), 0, kFirstValid + 1).has_value());
 }
 
 TEST(Miner, NeverWrapsPastMaxNonce) {
     // None of the last 10 nonces is valid. A miner that wrapped around to 0 would reach
     // kFirstValid within the extra tries allowed here.
     const std::uint32_t start = 0xffffffff - 9;
-    EXPECT_FALSE(mine(template_header(), pow_limit(), start, 10 + kFirstValid + 1).has_value());
+    EXPECT_FALSE(mine(template_header(), pow_params(), start, 10 + kFirstValid + 1).has_value());
 }
 
 // Milestone 2.
@@ -104,7 +106,7 @@ TEST(BackgroundMiner, SeveralThreadsFindValidBlocks) {
     using namespace std::chrono_literals;
     const ConsensusParams p = easy_params();
     Chainstate chain(p);
-    BackgroundMiner miner(p.pow_limit, 4);
+    BackgroundMiner miner(p, 4);
     EXPECT_EQ(miner.threads(), 4u);
     EXPECT_GE(BackgroundMiner::default_threads(), 1u);
     for (int i = 0; i < 8; ++i) {

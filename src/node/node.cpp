@@ -3,6 +3,7 @@
 #include "app/datadir.h"
 #include "core/address.h"
 #include "core/amount.h"
+#include "core/chaindb.h"
 #include "core/mempool.h"
 #include "core/miner.h"
 #include "core/params.h"
@@ -108,6 +109,29 @@ std::uint16_t parse_port(std::string_view text) {
 
 }  // namespace
 
+std::optional<std::filesystem::path> set_aside_replaced_chain(const std::filesystem::path& datadir, const ConsensusParams& params) {
+    namespace fs = std::filesystem;
+    if (!fs::is_directory(datadir / "chainstate")) return std::nullopt;
+    std::optional<ChainMeta> meta;
+    {
+        LevelDbStore db(datadir / "chainstate");  // closed again before anything moves
+        if (const std::optional<Bytes> stored = db.get(meta_key())) {
+            try {
+                meta = decode_meta(*stored);
+            } catch (const DeserializeError&) {
+                return std::nullopt;  // damaged: Chainstate says so
+            }
+        }
+    }
+    if (!meta || meta->network != params.network_name || meta->genesis == params.genesis.hash()) return std::nullopt;
+    const fs::path to = datadir / ("old-chain-" + meta->genesis.to_hex());
+    fs::create_directories(to);
+    for (const char* name : {"chainstate", "blocks", "index", "wallet"}) {
+        if (fs::exists(datadir / name)) fs::rename(datadir / name, to / name);
+    }
+    return to;
+}
+
 std::optional<NodeOptions> parse_node_options(std::span<const std::string_view> args) {
     NodeOptions options;
     for (std::size_t i = 0; i < args.size(); ++i) {
@@ -175,6 +199,11 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
     }
 
     std::filesystem::create_directories(datadir);
+    if (const std::optional<std::filesystem::path> old = set_aside_replaced_chain(datadir, p)) {
+        log_line(std::format("the {} chain here began at a genesis block this version replaced (the testnet started over "
+                             "with BoundHash, or mainnet launched): it and its wallet are kept in {}, and a new chain starts",
+                             p.network_name, old->string()));
+    }
     DataDir data(datadir);
     Chainstate chain(p, data.db, data.blocks);
     Mempool mempool(chain);
@@ -284,7 +313,7 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
             mining_to = mining.payee;
             mining_threads = threads;
             if (mining_to) {
-                miner.emplace(p.pow_limit, threads);
+                miner.emplace(p, threads);
                 log_line(std::format("mining to {} on {} thread{}", encode_address(*mining_to, p.address_version), threads,
                                      threads == 1 ? "" : "s"));
             } else {
@@ -338,8 +367,8 @@ void run_node(const std::filesystem::path& datadir, const NodeOptions& options, 
                 sample_hashes = hashes;
             }
             if (now - last_rate >= 60) {
-                log_line(std::format("mining at {:.0f} kH/s, difficulty {:.2f}",
-                                     static_cast<double>(hashes - last_hashes) / static_cast<double>(now - last_rate) / 1000,
+                log_line(std::format("mining at {:.0f} H/s, difficulty {:.2f}",
+                                     static_cast<double>(hashes - last_hashes) / static_cast<double>(now - last_rate),
                                      difficulty(next_work_required(chain.tip(), p), p)));
                 last_rate = now;
                 last_hashes = hashes;

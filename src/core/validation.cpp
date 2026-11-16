@@ -65,7 +65,8 @@ void roll_back(const std::vector<Change>& log, UtxoSet& utxos) {
 
 ConnectResult connect_block(const Block& block, int height, UtxoSet& utxos, BlockUndo& undo,
                             const ConsensusParams& params) {
-    if (check_block(block, params) != BlockCheck::Ok) return ConnectResult::BadBlock;
+    // The header's proof of work was checked when it entered the block tree (milestone 16).
+    if (check_block(block, params, false) != BlockCheck::Ok) return ConnectResult::BadBlock;
     if (block.txs[0].lock_time != static_cast<std::uint32_t>(height)) return ConnectResult::BadCoinbaseHeight;
 
     std::vector<Change> log;
@@ -185,13 +186,15 @@ void Chainstate::load() {
     const ChainMeta meta = decode_meta(*db_.get(meta_key()));
     if (meta.version != kChainDbVersion) throw std::runtime_error(std::format("unknown storage version {}", meta.version));
     if (meta.genesis != params_.genesis.hash()) {
-        // Milestone 15: the same network with another genesis is a chain from before it launched
-        // (0.10.0's --mainnet ran a provisional one). Nothing on it carries over.
+        // Milestone 15: the same network with another genesis is a chain its genesis replaced
+        // (0.10.0's --mainnet ran a provisional one; milestone 16 started the testnet over). Nothing
+        // on it carries over. Milestone 16: `boundd node` and bound-qt move it aside by themselves
+        // (set_aside_replaced_chain); this is for everything else that opens a data directory.
         if (meta.network == params_.network_name) {
             throw std::runtime_error(std::format(
-                "the stored {} chain starts from another genesis block ({}), a preview from before {} launched: "
-                "move this data directory aside to start the real chain",
-                meta.network, meta.genesis.to_hex(), meta.network));
+                "the stored {} chain starts from another genesis block ({}), one this version replaced: "
+                "`boundd node` and bound-qt set such a chain aside by themselves, or move this data directory aside",
+                meta.network, meta.genesis.to_hex()));
         }
         throw std::runtime_error("the stored chain belongs to another network (" + meta.network + ")");
     }
@@ -245,7 +248,7 @@ void Chainstate::verify_recent_blocks(int count) const {
             const std::optional<Bytes> undo = db_.get(undo_key(at(h).hash));
             std::size_t inputs = 0;
             for (const Transaction& tx : block.txs) inputs += tx.inputs.size();
-            ok = check_block(block, params_) == BlockCheck::Ok && undo && decode_undo(*undo).spent.size() == inputs;
+            ok = check_block(block, params_, false) == BlockCheck::Ok && undo && decode_undo(*undo).spent.size() == inputs;
         } catch (const std::runtime_error&) {
             // reported below
         }
@@ -275,7 +278,7 @@ std::optional<BlockUndo> Chainstate::read_undo(const BlockIndex& node) const {
 AcceptResult Chainstate::check_header(const BlockHeader& header, std::int64_t now) const {
     const uint256 hash = header.hash();
     if (tree_.contains(hash)) return AcceptResult::Duplicate;
-    if (!check_proof_of_work(hash, header.bits, params_.pow_limit)) return AcceptResult::BadProofOfWork;
+    if (!check_proof_of_work(header, params_)) return AcceptResult::BadProofOfWork;
     const auto found = tree_.find(header.prev_hash);
     if (found == tree_.end()) return AcceptResult::UnknownParent;
     const BlockIndex& parent = found->second;
@@ -325,7 +328,8 @@ BlockAcceptResult Chainstate::accept_block(const Block& block, std::int64_t now)
         // A body that fails the context-free rules is turned away without marking the header: its
         // transactions may simply not be the ones the header commits to, and anyone can pair a
         // valid header with garbage.
-        if (check_block(block, params_) != BlockCheck::Ok) return {AcceptResult::Accepted, ConnectResult::BadBlock};
+        // The header's proof of work passed check_header just now, or when it entered the tree.
+        if (check_block(block, params_, false) != BlockCheck::Ok) return {AcceptResult::Accepted, ConnectResult::BadBlock};
         WriteBatch batch;
         if (node == nullptr) node = &add_header(block.header, batch);
         node->pos = block_store_.append(block);  // on disk before the index entry that points at it

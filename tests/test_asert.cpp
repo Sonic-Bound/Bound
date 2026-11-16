@@ -149,9 +149,9 @@ TEST(Asert, MatchesTheSpecificationsCode) {
     }
 }
 
-// Beyond the specification (an easy pow_limit, as the tests' is, and mainnet's was until milestone
-// 15 chose Bitcoin's), the arithmetic stays exact: one half-life behind schedule doubles the
-// target, one ahead halves it, and the clamps hold.
+// Beyond the specification (an easy pow_limit, as the tests' is, and mainnet's: 0x1e03ffff since
+// milestone 16, about 2^234, above the spec's 2^224), the arithmetic stays exact: one half-life
+// behind schedule doubles the target, one ahead halves it, and the clamps hold.
 TEST(Asert, BehavesWithAnEasyPowLimit) {
     const arith_uint256 easy = target_of(0x207fffff);  // ~2^255, where the spec's 256 bits would overflow
     const arith_uint256 anchor = target_of(0x1f00ffff);
@@ -191,7 +191,7 @@ ConsensusParams asert_params() {
 Block block_at(const Chainstate& chain, std::uint32_t time, std::optional<std::uint32_t> bits = std::nullopt) {
     Block b = make_block_template(chain, test_key("miner").public_key(), {}, time).value();
     if (bits) b.header.bits = *bits;
-    return mine_block(std::move(b), chain.params().pow_limit);
+    return mine_block(std::move(b), chain.params());
 }
 
 }  // namespace

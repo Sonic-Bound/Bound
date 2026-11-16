@@ -148,7 +148,7 @@ Block greedy_block(const Chainstate& chain) {
     Block block = block_on(chain.tip(), chain.params(), test_key("mallory").public_key(), kTestGenesisTime + 60);
     block.txs[0].outputs[0].amount += 1;  // more than the subsidy
     block.header.merkle_root = block.compute_merkle_root();
-    block.header = mine(block.header, chain.params().pow_limit).value();
+    block.header = mine(block.header, chain.params()).value();
     return block;
 }
 
@@ -336,7 +336,7 @@ TEST_F(P2PTest, AnInvalidHeaderCutsThePeerOff) {
     ASSERT_TRUE(raw.handshake());
     BlockHeader bad = greedy_block(node.chain).header;
     bad.bits = 0x207ffffe;  // not the difficulty the rules give it
-    bad = mine(bad, params.pow_limit).value();
+    bad = mine(bad, params).value();
     const std::vector<BlockHeader> headers{bad};
     EXPECT_FALSE(raw.send(command::kHeaders, encode_headers(headers)));
 }
@@ -458,7 +458,7 @@ TEST_F(P2PTest, AnInvalidHeaderInPresyncCutsThePeerOff) {
     mine_blocks(fork, bob, 10);
     std::vector<BlockHeader> headers = headers_of(fork, 1, 10);
     headers[9].bits = 0x207ffffe;
-    headers[9] = mine(headers[9], params.pow_limit).value();
+    headers[9] = mine(headers[9], params).value();
     RawPeer raw(node);
     ASSERT_TRUE(raw.handshake());
     EXPECT_FALSE(raw.send(command::kHeaders, encode_headers(headers)));

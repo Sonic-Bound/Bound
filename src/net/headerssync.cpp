@@ -51,7 +51,7 @@ HeadersSync::Check HeadersSync::advance(Tip& tip, const BlockHeader& header, std
         return Check::Invalid;
     }
     const uint256 hash = header.hash();
-    if (!check_proof_of_work(hash, header.bits, params_.pow_limit)) {
+    if (!check_proof_of_work(header, params_)) {
         why = "bad proof of work";
         return Check::Invalid;
     }

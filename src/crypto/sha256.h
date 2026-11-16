@@ -13,7 +13,7 @@ namespace bound {
 using Digest32 = std::array<std::uint8_t, 32>;
 
 // Incremental SHA-256 (FIPS 180-4), wrapping libsodium's crypto_hash_sha256_*. Copyable, and a
-// copy carries the full mid-hash state, which is what the miner's midstate trick relies on.
+// copy carries the full mid-hash state.
 class Sha256 {
 public:
     Sha256();

@@ -97,6 +97,9 @@ TEST(WalletApp, ConsoleWordsAreSplitLikeAShell) {
 TEST(WalletApp, RunsANodeInsideAndShowsItsWallet) {
     TempDir dir;
     NodeOptions options;
+    // Milestone 16: regtest, whose small BoundHash mines a block in a moment even in Debug; a
+    // testnet block takes a Debug build minutes now.
+    options.network = Network::Regtest;
     options.listen = false;
     options.local = true;
     options.use_seeds = false;  // never the real network
@@ -136,7 +139,7 @@ TEST(WalletApp, RunsANodeInsideAndShowsItsWallet) {
         // The overview shows the mined coins as maturing, and the list has every block's coinbase.
         const json wallet = rpc.call("getwalletinfo");
         const QString maturing = coins_text(parse_coins(wallet["immature_balance"].get<std::string>()).value());
-        EXPECT_EQ(maturing, coins_text(Amount{height} * 5 * kCoin));
+        EXPECT_EQ(maturing, coins_text(Amount{height} * block_subsidy(1, regtest_params())));
         window.refresh();
         EXPECT_TRUE(wait_until([&] { return shows_text(window.page(MainWindow::Overview), maturing); }));
         auto* table = window.page(MainWindow::Transactions)->findChild<QTableWidget*>();
@@ -152,7 +155,7 @@ TEST(WalletApp, RunsANodeInsideAndShowsItsWallet) {
             ASSERT_TRUE(wait_until([&] { return rpc.call("getblockcount").get<int>() >= 106; }, 600'000));
             rpc.call("setmining", json::array({false}));
             rpc.call("walletpassphrase", json::array({"correct horse battery", 60}));
-            rpc.call("sendtoaddress", json::array({encode_address(test_key("bob").public_key(), testnet_params().address_version), "7.25"}));
+            rpc.call("sendtoaddress", json::array({encode_address(test_key("bob").public_key(), regtest_params().address_version), "7.25"}));
             rpc.call("walletlock");
             window.refresh();
         }

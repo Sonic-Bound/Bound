@@ -3,6 +3,7 @@
 #include "core/amount.h"
 #include "core/arith_uint256.h"
 #include "core/block.h"
+#include "core/boundhash.h"
 #include "core/transaction.h"
 #include "core/uint256.h"
 
@@ -38,10 +39,13 @@ struct ConsensusParams {
     uint256 pow_limit;                 // easiest allowed target
     std::uint32_t pow_limit_bits = 0;  // compact form of pow_limit; must round-trip exactly.
                                        // The genesis block's bits, where the difficulty starts.
+    // Milestone 16: proof of work is BoundHash (core/boundhash.h) with this many 128-byte lines of
+    // scratchpad: 512 KiB on mainnet and testnet; regtest's fewer keep tests quick.
+    std::uint32_t pow_lines = kBoundHashLines;
     std::int64_t max_future_block_time = 0;  // seconds a header's time may run ahead of `now`
     int median_time_span = 0;                // headers in the median-time-past window
     BlockHeader genesis;
-    uint256 genesis_hash;  // genesis.hash(), hard-coded as a self-check
+    uint256 genesis_hash;  // genesis.hash() (its id, SHA-256d), hard-coded as a self-check
 
     // Milestone 2: economics and block bodies.
     std::int64_t target_spacing = 0;   // seconds per block the difficulty aims for

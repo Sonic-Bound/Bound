@@ -1,5 +1,7 @@
 #include "core/pow.h"
 
+#include "core/block.h"
+#include "core/boundhash.h"
 #include "core/chain.h"
 #include "core/params.h"
 
@@ -46,6 +48,14 @@ bool check_proof_of_work(const uint256& hash, std::uint32_t bits, const uint256&
     const std::optional<uint256> target = target_from_compact(bits);
     if (!target || target->is_zero() || *target > pow_limit) return false;
     return hash <= *target;
+}
+
+uint256 pow_hash(const BlockHeader& header, const ConsensusParams& params) { return bound_hash(header, params.pow_lines); }
+
+bool check_proof_of_work(const BlockHeader& header, const ConsensusParams& params) {
+    const std::optional<uint256> target = target_from_compact(header.bits);
+    if (!target || target->is_zero() || *target > params.pow_limit) return false;
+    return pow_hash(header, params) <= *target;
 }
 
 arith_uint256 block_proof(std::uint32_t bits) {

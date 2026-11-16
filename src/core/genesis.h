@@ -24,14 +24,17 @@ namespace bound {
 // (Transaction::kMaxMemo bytes).
 std::optional<Block> make_genesis(std::string_view message, Amount reward, std::uint32_t time, std::uint32_t bits);
 
+struct ConsensusParams;
+
 // Mines a genesis header on `threads` threads: every nonce at header.time, then every nonce a
-// second later, and so on, until the hash meets header.bits. At Bitcoin's difficulty 1 that's
-// about 2^32 hashes, all of one second's nonces: a second has a solution only about two times in
-// three (1 - 1/e), so the time often moves on. `progress` (optional) is called from one thread
-// about once a second with the hashes tried so far. nullopt if `stop` is requested first, or if
-// the bits ask for a target above pow_limit or none at all. `nonces_per_second` is how many nonces
-// are tried at each time before the next second (every one of them unless a test asks for fewer).
-std::optional<BlockHeader> mine_genesis(BlockHeader header, const uint256& pow_limit, unsigned threads,
+// second later, and so on, until its proof of work (BoundHash, with params.pow_lines) meets
+// header.bits. A network's easiest target takes millions of hashes, far fewer than a second's 2^32
+// nonces, so in practice the time never moves on; the search would still be exact if it did.
+// `progress` (optional) is called from one thread about once a second with the hashes tried so
+// far. nullopt if `stop` is requested first, or if the bits ask for a target above
+// params.pow_limit or none at all. `nonces_per_second` is how many nonces are tried at each time
+// before the next second (every one of them unless a test asks for fewer).
+std::optional<BlockHeader> mine_genesis(BlockHeader header, const ConsensusParams& params, unsigned threads,
                                         std::stop_token stop = {},
                                         const std::function<void(std::uint64_t hashes)>& progress = {},
                                         std::uint64_t nonces_per_second = std::uint64_t{1} << 32);

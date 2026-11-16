@@ -26,14 +26,14 @@ protected:
         h.merkle_root = uint256(sha256d(bytes_of(std::string(salt) + std::to_string(parent.height + 1))));
         h.time = time;
         h.bits = next_work_required(parent, params);
-        return mine(h, params.pow_limit).value();
+        return mine(h, params).value();
     }
 
     BlockHeader next(std::uint32_t time) const { return header_on(*last, time); }
 
     // The same header with a nonce that fails proof of work.
     BlockHeader unsolved(BlockHeader h) const {
-        while (check_proof_of_work(h.hash(), h.bits, params.pow_limit)) ++h.nonce;
+        while (check_proof_of_work(h, params)) ++h.nonce;
         return h;
     }
 
@@ -113,7 +113,7 @@ TEST_F(BlockTreeTest, ChecksProofOfWorkBeforeChainContext) {
 TEST_F(BlockTreeTest, RejectsUnknownParents) {
     BlockHeader orphan = next(kT0 + 60);
     orphan.prev_hash = uint256(sha256d(bytes_of("unknown parent")));
-    orphan = mine(orphan, params.pow_limit).value();
+    orphan = mine(orphan, params).value();
     EXPECT_EQ(accept(orphan), AcceptResult::UnknownParent);
 }
 
@@ -131,7 +131,7 @@ TEST_F(BlockTreeTest, AcceptsForks) {
 TEST_F(BlockTreeTest, RejectsWrongDifficulty) {
     BlockHeader h = next(kT0 + 60);
     h.bits = 0x207ffffe;  // valid proof of work for its own bits, but not the bits the rules give
-    h = mine(h, params.pow_limit).value();
+    h = mine(h, params).value();
     EXPECT_EQ(accept(h), AcceptResult::BadDifficulty);
 }
 
@@ -177,7 +177,7 @@ TEST_F(BlockTreeTest, RejectionsLeaveTheTreeUnchanged) {
     const BlockHeader bad_pow = unsolved(next(kT0 + 1000));
     BlockHeader bad_bits = next(kT0 + 1000);
     bad_bits.bits = 0x207ffffe;
-    bad_bits = mine(bad_bits, params.pow_limit).value();
+    bad_bits = mine(bad_bits, params).value();
     const BlockHeader too_old = next(kT0 + 1);
     EXPECT_NE(accept(bad_pow), AcceptResult::Accepted);
     EXPECT_NE(accept(bad_bits), AcceptResult::Accepted);

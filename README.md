@@ -9,7 +9,7 @@
 
 <p align="center">
   A proof-of-work cryptocurrency written from scratch in C++20.<br>
-  UTXO ledger · SHA-256d mining · Ed25519 signatures · its own P2P network, wallet and desktop app.
+  UTXO ledger · its own proof of work, BoundHash · Ed25519 signatures · its own P2P network, wallet and desktop app.
 </p>
 
 <p align="center">
@@ -22,8 +22,9 @@
 
 > [!NOTE]
 > BOUND runs as a **testnet**, whose coins have no value. **Mainnet is ready to launch**, the way
-> Bitcoin did: a genesis quoting that day's headline, no premine, Bitcoin's difficulty 1. See the
-> [road to mainnet](docs/mainnet-roadmap.md) and [launch day](docs/launch-day.md).
+> Bitcoin did: a genesis quoting that day's headline, no premine, difficulty 1. It's mined with
+> [BoundHash](docs/boundhash.md), BOUND's own proof of work, which Bitcoin's mining machines can't
+> compute. See the [road to mainnet](docs/mainnet-roadmap.md) and [launch day](docs/launch-day.md).
 
 <p align="center">
   <img src="docs/screenshots/wallet.png" width="780" alt="The BOUND wallet: balances, the network, recent transactions">
@@ -82,6 +83,9 @@ mining*, or start the node with `boundd node --mine <address>`.
 **Explorer:** [explorer.bound.sarl](https://explorer.bound.sarl) shows the testnet's blocks,
 transactions and addresses.
 
+The testnet started over on 0.11.0, with BoundHash. Nodes from before it can't join: upgrading moves
+the old chain and wallet aside (`old-chain-…` in the data directory) and syncs the new one.
+
 ## Networks
 
 Every program takes `--testnet` (the default until mainnet launches), `--mainnet` or `--regtest`,
@@ -92,7 +96,8 @@ and each network keeps its chain in its own data directory.
 | Block time | 60 seconds | 10 minutes | 10 minutes |
 | Reward | 5 BOUND, halving every 2,100,000 blocks (~4 years) | 50 BOUND, halving every 210,000 blocks (~4 years) | 50 BOUND, halving every 150 blocks |
 | Supply | 20,999,999.727 BOUND | 20,999,999.9769 BOUND, no premine | |
-| Difficulty | retargets daily (1,440 blocks), at most 4× | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life, from Bitcoin's difficulty 1 and never below | fixed and trivial: any CPU, instantly |
+| Proof of work | [BoundHash](docs/boundhash.md), 512 KiB per hash | BoundHash, 512 KiB per hash | BoundHash, 8 KiB per hash |
+| Difficulty | retargets daily (1,440 blocks), at most 4×; from ~65,000 hashes a block | ASERT (Bitcoin Cash's aserti3-2d), every block, 2-day half-life, from difficulty 1 (2^22 hashes, a PC's quarter of an hour) and never below | fixed and trivial: any CPU, instantly |
 | Addresses | start with `9` (51 characters) | start with `B` (52 characters) | start with `9` |
 | Ports | P2P 18333, RPC 18332 | P2P 7333, RPC 7332 | P2P 18544, RPC 18543 |
 
@@ -101,8 +106,9 @@ at most 1 MB; timestamps at most 2 hours ahead; RPC on 127.0.0.1 only. Relay pol
 per byte in fees, no outputs under 420 units, full RBF, at most 25 unconfirmed ancestors or
 descendants.
 
-The testnet's genesis is `0000a7ba8cc2ed04fa56bb3eaf23d5879874e7ffd060d81a2aca994f79b79293`, with
-the message *"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*.
+The testnet's genesis is `019fd113f42b4265bd706686e723bb46282772e655334b9c024f5c960e7ae8d1`, with
+the message *"BOUND testnet 01/Nov/2026: a proof-of-work coin built from scratch in C++"*. Block ids
+are SHA-256d of the header, as Bitcoin's; the proof of work is a separate number, its BoundHash.
 Mainnet's genesis is a placeholder until launch day: a node on it warns that its coins will be
 thrown away.
 
@@ -185,7 +191,8 @@ wherever `--datadir` points. Give the same one to `bound-cli`, `bound-qt` and `b
 | 12 | Hardening: sanitizers and fuzzing in CI, Windows CI, consensus review, a multi-threaded miner | ✅ [notes](docs/milestone-12.md) |
 | 13 | Releases: Windows and Linux packages built, tested and attested by GitHub Actions; `--version` | ✅ [notes](docs/milestone-13.md) |
 | 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); servers: 2 of 3 up, [explorer](https://explorer.bound.sarl) and 2 DNS seeders live |
-| 15 | Mainnet launch: Bitcoin's difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | ready ✅ [notes](docs/milestone-15.md); the day: [runbook](docs/launch-day.md) |
+| 15 | Mainnet launch: difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | ready ✅ [notes](docs/milestone-15.md); the day: [runbook](docs/launch-day.md) |
+| 16 | BoundHash: BOUND's own memory-hard proof of work; the testnet started over on it | ✅ [notes](docs/milestone-16.md), [spec](docs/boundhash.md) |
 
 ## Layout
 

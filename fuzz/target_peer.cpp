@@ -82,7 +82,7 @@ FUZZ_TARGET_SEEDED(peer, peer_seeds) {
     std::uint32_t time = p.genesis.time;
     for (int i = 0; i < 3; ++i) {
         time += 600;
-        (void)chain.accept_block(mine_block(make_block_template(chain, miner, {}, time).value(), p.pow_limit), time + 600);
+        (void)chain.accept_block(mine_block(make_block_template(chain, miner, {}, time).value(), p), time + 600);
     }
     Mempool mempool(chain);
     AddrMan addrman(1);
@@ -129,7 +129,7 @@ FUZZ_TARGET_SEEDED(peer, peer_seeds) {
             if (in.flag()) b.txs[0].memo = in.bytes(16);
             b.header.merkle_root = b.compute_merkle_root();
             if (in.flag()) b.header.time += in.u16();
-            b = mine_block(std::move(b), p.pow_limit);
+            b = mine_block(std::move(b), p);
             if (in.flag()) b.header.prev_hash = uint256(sha256(in.bytes(8)));  // somewhere unknown
             if (in.flag()) b.txs.push_back(b.txs[0]);                           // a duplicate
             keep = peers.receive(id, frame_message(magic, command::kBlock, b.serialize()), now);

@@ -30,8 +30,8 @@ TxCheck check_transaction(const Transaction& tx) {
     return TxCheck::Ok;
 }
 
-BlockCheck check_block(const Block& block, const ConsensusParams& params) {
-    if (!check_proof_of_work(block.hash(), block.header.bits, params.pow_limit)) return BlockCheck::BadProofOfWork;
+BlockCheck check_block(const Block& block, const ConsensusParams& params, bool check_pow) {
+    if (check_pow && !check_proof_of_work(block.header, params)) return BlockCheck::BadProofOfWork;
     if (block.txs.empty()) return BlockCheck::NoTransactions;
     if (!block.txs[0].is_coinbase()) return BlockCheck::FirstNotCoinbase;
     for (std::size_t i = 1; i < block.txs.size(); ++i) {

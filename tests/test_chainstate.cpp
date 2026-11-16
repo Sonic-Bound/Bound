@@ -24,7 +24,7 @@ protected:
         block.header.merkle_root = block.compute_merkle_root();
         block.header.time = static_cast<std::uint32_t>(kTestGenesisTime + 60 * (chain.height() + 1));
         block.header.bits = next_work_required(chain.tip(), params);
-        block.header = mine(block.header, params.pow_limit).value();
+        block.header = mine(block.header, params).value();
         return block;
     }
 
@@ -121,7 +121,7 @@ TEST_F(ChainstateTest, HeaderRulesStillApply) {
     mine_blocks(chain, alice.public_key(), 1);
     Block orphan = forced_block({}, 5 * kCoin);
     orphan.header.prev_hash = test_hash("a block nobody has seen");
-    orphan.header = mine(orphan.header, params.pow_limit).value();
+    orphan.header = mine(orphan.header, params).value();
     const BlockAcceptResult r = chain.accept_block(orphan, kTestNow);
     EXPECT_EQ(r.header, AcceptResult::UnknownParent);
     EXPECT_FALSE(r.accepted());

@@ -22,7 +22,7 @@ TEST(Params, GenesisIsValid) {
     EXPECT_TRUE(p.genesis.prev_hash.is_zero());
     EXPECT_EQ(p.genesis.bits, p.pow_limit_bits);
     EXPECT_EQ(p.genesis.hash(), p.genesis_hash);
-    EXPECT_TRUE(check_proof_of_work(p.genesis_hash, p.genesis.bits, p.pow_limit));
+    EXPECT_TRUE(check_proof_of_work(p.genesis, p));
 }
 
 TEST(Params, TimeRulesAreSet) {

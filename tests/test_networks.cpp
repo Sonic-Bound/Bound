@@ -38,7 +38,7 @@ TEST(Networks, EveryGenesisIsValid) {
         EXPECT_TRUE(p.genesis.prev_hash.is_zero());
         EXPECT_EQ(p.genesis.bits, p.pow_limit_bits);
         EXPECT_EQ(p.genesis.hash(), p.genesis_hash);
-        EXPECT_TRUE(check_proof_of_work(p.genesis_hash, p.genesis.bits, p.pow_limit));
+        EXPECT_TRUE(check_proof_of_work(p.genesis, p));
         const Block g = genesis_block(p);
         EXPECT_EQ(g.compute_merkle_root(), p.genesis.merkle_root);
         EXPECT_EQ(check_block(g, p), BlockCheck::Ok);
@@ -84,10 +84,14 @@ TEST(Networks, MainnetHasBitcoinsSchedule) {
     EXPECT_EQ(p.coinbase_maturity, 100);
     EXPECT_EQ(p.max_block_size, 1'000'000u);
     EXPECT_EQ(p.max_future_block_time, 2 * 60 * 60);
-    // Milestone 15: Bitcoin's difficulty 1, where the chain starts and the easiest it can get.
-    EXPECT_EQ(p.pow_limit_bits, 0x1d00ffffu);
-    EXPECT_EQ(p.genesis.bits, 0x1d00ffffu);
+    // Milestone 15: difficulty 1, where the chain starts and the easiest it can get. Milestone 16:
+    // with BoundHash that's 2^22 hashes a block (Bitcoin's 2^32 SHA-256d hashes took a PC about as long).
+    EXPECT_EQ(p.pow_limit_bits, 0x1e03ffffu);
+    EXPECT_EQ(p.genesis.bits, p.pow_limit_bits);
     EXPECT_DOUBLE_EQ(difficulty(p.genesis.bits, p), 1.0);
+    EXPECT_GE(block_proof(p.pow_limit_bits), arith_uint256(1) << 22);
+    EXPECT_LT(block_proof(p.pow_limit_bits), (arith_uint256(1) << 22) + 100);
+    EXPECT_EQ(p.pow_lines, kBoundHashLines);
     EXPECT_FALSE(p.launched);  // until launch day mines the real genesis
     EXPECT_TRUE(testnet_params().launched);
     EXPECT_EQ(total_supply(testnet_params()), Amount{2'099'999'972'700'000});  // unchanged
@@ -128,7 +132,7 @@ TEST(Networks, RegtestNeverRetargets) {
     for (int i = 0; i < 5; ++i) {
         std::optional<Block> tmpl = make_block_template(chain, miner, {}, p.genesis.time + 600 * (i + 1));
         ASSERT_TRUE(tmpl.has_value());
-        const Block block = mine_block(std::move(*tmpl), p.pow_limit);
+        const Block block = mine_block(std::move(*tmpl), p);
         ASSERT_TRUE(chain.accept_block(block, p.genesis.time + 100'000).accepted());
     }
     EXPECT_EQ(chain.height(), 5);

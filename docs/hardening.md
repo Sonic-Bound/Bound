@@ -88,8 +88,9 @@ buffer. The number of bits is capped by time: timestamps must pass the median of
 chain can't gain more than about 6 headers a second since the fork.
 
 **On a fresh node,** `minimum_chain_work` is what protects it. Raise it each release to the chain's
-work at the time, as Core does. The testnet's is the public chain's work at height 7,000 since
-milestone 15; mainnet's is 0 until it has a chain. While it's 0 a fresh node stores any valid
+work at the time, as Core does. The testnet's was the public chain's work at height 7,000 in
+milestone 15, and is 0 again since milestone 16 started the testnet over; mainnet's is 0 until it
+has a chain. While it's 0 a fresh node stores any valid
 headers, and only a synced node is protected, by the threshold.
 
 ## Where BOUND differs from Bitcoin Core

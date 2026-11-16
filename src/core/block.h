@@ -28,7 +28,8 @@ struct BlockHeader {
     std::array<std::uint8_t, kSize> serialize() const;
     // Throws DeserializeError unless data is exactly 80 bytes.
     static BlockHeader deserialize(ByteSpan data);
-    // uint256(sha256d(serialize())): the block's id, and the number proof of work constrains.
+    // uint256(sha256d(serialize())): the block's id. Until milestone 16 it was also the number proof
+    // of work constrains; now that's pow_hash (core/pow.h), BoundHash.
     uint256 hash() const;
 
     friend bool operator==(const BlockHeader&, const BlockHeader&) = default;

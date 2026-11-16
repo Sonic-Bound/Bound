@@ -4,3 +4,4 @@ out/
 vcpkg_installed/
 CMakeUserPresets.json
 dist/
+__pycache__/

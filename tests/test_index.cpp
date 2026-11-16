@@ -220,7 +220,7 @@ TEST_F(ChainIndexTest, RefusesAnotherNetworksIndex) {
     ConsensusParams other = easy_params();
     other.genesis_coinbase = make_coinbase(0, 5 * kCoin, PublicKey{}, bytes_of("another network"));
     other.genesis.merkle_root = genesis_block(other).compute_merkle_root();
-    other.genesis = bound::mine(other.genesis, other.pow_limit).value();
+    other.genesis = bound::mine(other.genesis, other).value();
     other.genesis_hash = other.genesis.hash();
     Chainstate foreign(other);
     EXPECT_THROW(ChainIndex(db, foreign), std::runtime_error);

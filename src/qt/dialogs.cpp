@@ -392,7 +392,8 @@ void show_about(QWidget* parent) {
     box.setIconPixmap(logo(72));
     box.setText(QStringLiteral("<h3>BOUND wallet %1</h3>").arg(QString::fromStdString(std::string(version()))));
     box.setInformativeText(
-        QStringLiteral("<p>A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, SHA-256d mining, "
+        QStringLiteral("<p>A proof-of-work cryptocurrency written from scratch in C++20: UTXO ledger, BoundHash mining (its own "
+                       "memory-hard proof of work), "
                        "Ed25519 signatures. This app is a full node with a wallet, like Bitcoin-Qt.</p>"
                        "<p>Networks: mainnet%3, testnet and regtest, whose coins have no value.</p>"
                        "<p>MIT License. Built with Qt %1%2.<br>"

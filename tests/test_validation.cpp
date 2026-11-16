@@ -36,7 +36,7 @@ protected:
         block.txs.push_back(make_coinbase(coinbase_height, claim, miner, {}));
         for (Transaction& tx : txs) block.txs.push_back(std::move(tx));
         block.header.merkle_root = block.compute_merkle_root();
-        block.header = mine(block.header, params.pow_limit).value();
+        block.header = mine(block.header, params).value();
         return block;
     }
 
@@ -170,7 +170,7 @@ TEST_F(ValidationTest, CanSpendAnOutputFromEarlierInTheSameBlock) {
 TEST_F(ValidationTest, RunsTheContextFreeChecksToo) {
     Block block = block_with(11, 5 * kCoin + kFee, {payment()});
     block.header.merkle_root = test_hash("wrong");
-    block.header = mine(block.header, params.pow_limit).value();
+    block.header = mine(block.header, params).value();
     BlockUndo undo;
     EXPECT_EQ(connect_block(block, 11, utxos, undo, params), ConnectResult::BadBlock);
 }

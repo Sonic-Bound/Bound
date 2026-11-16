@@ -1,6 +1,7 @@
 #include "core/genesis.h"
 
 #include "core/miner.h"
+#include "core/params.h"
 #include "core/pow.h"
 #include "core/transaction.h"
 #include "crypto/ed25519.h"
@@ -28,20 +29,20 @@ std::optional<Block> make_genesis(std::string_view message, Amount reward, std::
     return block;
 }
 
-// The search space is cut into chunks of 2^20 nonces, handed out in order: with every nonce tried
-// at each time, chunk c is the nonces (c mod 4096) * 2^20 onwards, at header.time + c / 4096. Once
-// a thread finds a solution in chunk c, nobody starts a chunk after c, but the chunks before it
-// still finish. So the answer is always the first solution in that order, however many threads
-// search: anyone can run it again and get the same block.
-std::optional<BlockHeader> mine_genesis(BlockHeader header, const uint256& pow_limit, unsigned threads,
+// The search space is cut into chunks of 256 nonces (about a quarter of a second of BoundHash),
+// handed out in order: with every nonce tried at each time, chunk c is the nonces (c mod 2^24) * 256
+// onwards, at header.time + c / 2^24. Once a thread finds a solution in chunk c, nobody starts a
+// chunk after c, but the chunks before it still finish. So the answer is always the first solution
+// in that order, however many threads search: anyone can run it again and get the same block.
+std::optional<BlockHeader> mine_genesis(BlockHeader header, const ConsensusParams& params, unsigned threads,
                                         std::stop_token stop,
                                         const std::function<void(std::uint64_t hashes)>& progress,
                                         std::uint64_t nonces_per_second) {
     const std::optional<uint256> target = target_from_compact(header.bits);
-    if (!target || target->is_zero() || *target > pow_limit) return std::nullopt;
+    if (!target || target->is_zero() || *target > params.pow_limit) return std::nullopt;
     nonces_per_second = std::clamp<std::uint64_t>(nonces_per_second, 1, std::uint64_t{1} << 32);
 
-    const std::uint64_t chunk_size = std::min(std::uint64_t{1} << 20, nonces_per_second);
+    const std::uint64_t chunk_size = std::min(std::uint64_t{256}, nonces_per_second);
     const std::uint64_t chunks_per_second = (nonces_per_second + chunk_size - 1) / chunk_size;
     const std::uint64_t last_chunk =
         (std::uint64_t{std::numeric_limits<std::uint32_t>::max()} - header.time + 1) * chunks_per_second - 1;
@@ -62,7 +63,7 @@ std::optional<BlockHeader> mine_genesis(BlockHeader header, const uint256& pow_l
             const std::uint64_t first = (chunk % chunks_per_second) * chunk_size;
             const auto start = static_cast<std::uint32_t>(first);
             const std::uint64_t tries = std::min(chunk_size, nonces_per_second - first);
-            const std::optional<BlockHeader> solved = mine(h, pow_limit, start, tries);
+            const std::optional<BlockHeader> solved = mine(h, params, start, tries);
             hashes += solved ? std::uint64_t{solved->nonce} - start + 1 : tries;
             if (solved) {
                 const std::lock_guard lock(mutex);

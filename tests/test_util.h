@@ -136,6 +136,7 @@ inline ConsensusParams easy_params() {
     p.network_name = "unittest";
     p.pow_limit_bits = 0x207fffff;
     p.pow_limit = target_from_compact(p.pow_limit_bits).value();
+    p.pow_lines = 64;  // milestone 16: regtest's small BoundHash
     p.max_future_block_time = 2 * 60 * 60;
     p.median_time_span = 11;
     p.target_spacing = 60;
@@ -152,7 +153,7 @@ inline ConsensusParams easy_params() {
     p.genesis.merkle_root = genesis_block(p).compute_merkle_root();
     p.genesis.time = kTestGenesisTime;
     p.genesis.bits = p.pow_limit_bits;
-    p.genesis = mine(p.genesis, p.pow_limit).value();
+    p.genesis = mine(p.genesis, p).value();
     p.genesis_hash = p.genesis.hash();
     return p;
 }
@@ -161,7 +162,7 @@ inline ConsensusParams easy_params() {
 // minute after the tip in test time.
 inline Block next_block(const Chainstate& chain, const PublicKey& miner, std::vector<Transaction> txs = {}) {
     const auto time = static_cast<std::uint32_t>(kTestGenesisTime + 60 * (chain.height() + 1));
-    return mine_block(make_block_template(chain, miner, std::move(txs), time).value(), chain.params().pow_limit);
+    return mine_block(make_block_template(chain, miner, std::move(txs), time).value(), chain.params());
 }
 
 // Mines and accepts `count` empty blocks paying `miner`.
@@ -182,7 +183,7 @@ inline Block block_on(const BlockIndex& parent, const ConsensusParams& params, c
     block.header.merkle_root = block.compute_merkle_root();
     block.header.time = time;
     block.header.bits = next_work_required(parent, params);
-    block.header = mine(block.header, params.pow_limit).value();
+    block.header = mine(block.header, params).value();
     return block;
 }
 

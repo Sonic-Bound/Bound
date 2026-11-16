@@ -31,7 +31,7 @@ TxCheck check_transaction(const Transaction& tx);
 
 enum class BlockCheck {
     Ok,
-    BadProofOfWork,    // check_proof_of_work(header.hash(), header.bits, params.pow_limit) fails
+    BadProofOfWork,    // check_proof_of_work(header, params) fails (BoundHash, milestone 16)
     NoTransactions,
     FirstNotCoinbase,  // txs[0] has inputs
     ExtraCoinbase,     // a coinbase after txs[0]
@@ -40,8 +40,11 @@ enum class BlockCheck {
     TooLarge,          // serialize().size() > params.max_block_size
 };
 // Context-free block rules, in the order listed; the first failure wins. Proof of work comes
-// first because it's the cheapest filter. BadTransaction comes before BadMerkleRoot and TooLarge
-// because those serialize, and serialize() needs every signature count to be right.
-BlockCheck check_block(const Block& block, const ConsensusParams& params);
+// first, as the filter that costs a forger work. BadTransaction comes before BadMerkleRoot and
+// TooLarge because those serialize, and serialize() needs every signature count to be right.
+// Milestone 16: check_pow = false skips proof of work, for a block whose header already passed it
+// (it's in the block tree): BoundHash costs about a millisecond, too much to spend twice. Bitcoin's
+// CheckBlock has the same switch.
+BlockCheck check_block(const Block& block, const ConsensusParams& params, bool check_pow = true);
 
 }  // namespace bound

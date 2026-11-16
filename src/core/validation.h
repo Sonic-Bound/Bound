@@ -40,7 +40,8 @@ InputsCheck check_tx_inputs(const Transaction& tx, const UtxoSet& utxos, int spe
 // Applies `block` at `height` (>= 1) to `utxos`: spends every input and adds every output.
 // Transactions are applied in order, so one may spend an output created earlier in the same
 // block. On Ok, `undo` holds what disconnect_block needs. On failure `utxos` is left exactly as
-// it was. (ConnectResult is in chain.h.)
+// it was. (ConnectResult is in chain.h.) Milestone 16: check_block's rules are checked without
+// proof of work, which the header passed when it entered the block tree.
 ConnectResult connect_block(const Block& block, int height, UtxoSet& utxos, BlockUndo& undo,
                             const ConsensusParams& params);
 
@@ -98,7 +99,9 @@ public:
 
     // Adds a header without its transactions (headers-first sync, for milestone 6's networking).
     // Checks the rules in the order AcceptResult lists them. Proof of work comes before every check
-    // that needs the tree: it's the cheap filter that makes flooding us with headers expensive.
+    // that needs the tree: whoever floods us with headers must do that work for each one, and a
+    // header without it costs its sender the connection. (Milestone 16: BoundHash makes it about a
+    // millisecond for us too, so a duplicate is still spotted first, by its id.)
     // Never changes the active chain. `now` is the current Unix time, passed in so tests control
     // the clock.
     AcceptResult accept_header(const BlockHeader& header, std::int64_t now);

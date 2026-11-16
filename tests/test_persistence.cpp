@@ -3,11 +3,13 @@
 #include "core/storage.h"
 #include "core/validation.h"
 #include "core/wallet.h"
+#include "node/node.h"
 #include "test_util.h"
 
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <stdexcept>
@@ -40,7 +42,7 @@ protected:
         Block block = block_on(parent, params, miner.public_key(), kTestGenesisTime + 60 * (parent.height + 1));
         block.txs[0].outputs[0].amount += 1;
         block.header.merkle_root = block.compute_merkle_root();
-        block.header = mine(block.header, params.pow_limit).value();
+        block.header = mine(block.header, params).value();
         return block;
     }
 
@@ -147,7 +149,7 @@ TEST_F(PersistenceTest, RefusesAnotherNetworksChain) {
     const ByteSpan memo = bytes_of("another network");
     other.genesis_coinbase.memo.assign(memo.begin(), memo.end());
     other.genesis.merkle_root = genesis_block(other).compute_merkle_root();
-    other.genesis = mine(other.genesis, other.pow_limit).value();
+    other.genesis = mine(other.genesis, other).value();
     other.genesis_hash = other.genesis.hash();
     // Milestone 15: the same network's name with another genesis is a chain from before launch.
     try {
@@ -328,4 +330,50 @@ TEST(DiskPersistence, DamagedBlockFilesAreCaughtAtStartup) {
     LevelDbStore db(dir.path() / "chainstate");
     FlatFileBlockStore blocks(dir.path() / "blocks");
     EXPECT_THROW({ const Chainstate chain(params, db, blocks); }, std::runtime_error);
+}
+
+// Milestone 16: a chain whose genesis this version replaced (the testnet starting over with
+// BoundHash) is set aside with its wallet, and a new chain starts. Another network's chain, or this
+// genesis's own, stays where it is.
+TEST(SetAsideReplacedChain, MovesItAndItsWallet) {
+    namespace fs = std::filesystem;
+    const TempDir dir;
+    const ConsensusParams old_params = easy_params();
+    {
+        DataDir data(dir.path());
+        Chainstate chain(old_params, data.db, data.blocks);
+        mine_blocks(chain, test_key("miner").public_key(), 3);
+    }
+    fs::create_directories(dir.path() / "wallet");
+    std::ofstream(dir.path() / "wallet" / "marker") << "the old wallet";
+
+    EXPECT_EQ(set_aside_replaced_chain(dir.path(), old_params), std::nullopt);  // its own genesis
+    ConsensusParams elsewhere = old_params;
+    elsewhere.network_name = "elsewhere";
+    EXPECT_EQ(set_aside_replaced_chain(dir.path(), elsewhere), std::nullopt);  // not this network's chain
+    EXPECT_TRUE(fs::exists(dir.path() / "chainstate"));
+
+    ConsensusParams replaced = old_params;
+    const ByteSpan memo = bytes_of("the same network, started over");
+    replaced.genesis_coinbase.memo.assign(memo.begin(), memo.end());
+    replaced.genesis.merkle_root = genesis_block(replaced).compute_merkle_root();
+    replaced.genesis = mine(replaced.genesis, replaced).value();
+    replaced.genesis_hash = replaced.genesis.hash();
+    const std::optional<fs::path> moved = set_aside_replaced_chain(dir.path(), replaced);
+    ASSERT_TRUE(moved.has_value());
+    EXPECT_EQ(*moved, dir.path() / ("old-chain-" + old_params.genesis_hash.to_hex()));
+    for (const char* name : {"chainstate", "blocks", "wallet"}) EXPECT_FALSE(fs::exists(dir.path() / name)) << name;
+    EXPECT_TRUE(fs::exists(*moved / "wallet" / "marker"));
+
+    {
+        DataDir data(dir.path());  // the new chain, from its own genesis
+        const Chainstate chain(replaced, data.db, data.blocks);
+        EXPECT_EQ(chain.height(), 0);
+    }
+    {
+        DataDir data(*moved);  // the old one, intact where it was put
+        const Chainstate chain(old_params, data.db, data.blocks);
+        EXPECT_EQ(chain.height(), 3);
+    }
+    EXPECT_EQ(set_aside_replaced_chain(dir.path(), replaced), std::nullopt);  // nothing more to move
 }

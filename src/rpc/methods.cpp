@@ -643,7 +643,7 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
                   const auto now = static_cast<std::uint32_t>(node.clock());
                   std::optional<Block> tmpl = make_block_template(node.chain, payee, node.mempool.select(block_budget).txs, now);
                   if (!tmpl) tmpl = make_block_template(node.chain, payee, {}, now);
-                  const Block block = mine_block(std::move(tmpl.value()), node.chain.params().pow_limit);
+                  const Block block = mine_block(std::move(tmpl.value()), node.chain.params());
                   if (!node.peers.submit_block(block, node.clock()).accepted()) throw RpcError(rpc_error::kMisc, "a mined block was rejected");
                   hashes.push_back(block.hash().to_hex());
               }
