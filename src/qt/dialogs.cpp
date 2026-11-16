@@ -5,6 +5,9 @@
 #include "qt/session.h"
 #include "qt/style.h"
 #include "util/version.h"
+#include "wallet/mnemonic.h"
+
+#include <sodium.h>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -23,7 +26,10 @@
 #include <QRegularExpression>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace bound::gui {
 
@@ -108,13 +114,50 @@ public:
     }
 };
 
-QString seed_grouped(const QString& seed) {
-    QString text;
-    for (int i = 0; i < seed.size(); i += 8) {
-        if (i > 0) text += (i % 32 == 0) ? QStringLiteral("\n") : QStringLiteral("  ");
-        text += seed.mid(i, 8);
+// Milestone 17: the 24 words, numbered, down three columns (1-8, 9-16, 17-24).
+QString words_table(const QString& words) {
+    const QStringList list = words.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    constexpr int kColumns = 3;
+    const int rows = (static_cast<int>(list.size()) + kColumns - 1) / kColumns;
+    QString html = QStringLiteral("<table cellspacing='0' cellpadding='3'>");
+    for (int r = 0; r < rows; ++r) {
+        html += QStringLiteral("<tr>");
+        for (int c = 0; c < kColumns; ++c) {
+            const int i = c * rows + r;
+            if (i >= list.size()) continue;
+            html += QStringLiteral("<td align='right' style='color: %1;'>%2.</td><td style='padding-right: 22px;'><b>%3</b></td>")
+                        .arg(colors().muted.name())
+                        .arg(i + 1)
+                        .arg(list[i].toHtmlEscaped());
+        }
+        html += QStringLiteral("</tr>");
     }
-    return text;
+    return html + QStringLiteral("</table>");
+}
+
+// While someone types the words, the last one may be unfinished: the beginning of a word on the
+// list isn't a mistake yet. "" when the text is a whole seed.
+QString seed_status(const QString& text) {
+    std::string typed = text.toStdString();
+    std::string problem;
+    std::optional<Seed> seed = parse_seed(typed, &problem);
+    sodium_memzero(typed.data(), typed.size());
+    if (seed) {
+        sodium_memzero(seed->data(), seed->size());
+        return {};
+    }
+    const QStringList words = text.toLower().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+    if (!words.isEmpty() && !text.back().isSpace() && words.size() <= static_cast<qsizetype>(kSeedWords)) {
+        const std::string last = words.back().toStdString();
+        const bool earlier_ok =
+            std::all_of(words.begin(), words.end() - 1, [](const QString& w) { return word_index(w.toStdString()).has_value(); });
+        const auto next = std::lower_bound(kWordList.begin(), kWordList.end(), std::string_view(last));
+        const bool beginning = next != kWordList.end() && next->starts_with(last);
+        if (earlier_ok && beginning && !word_index(last)) {
+            return QStringLiteral("%1 of %2 words.").arg(words.size() - 1).arg(kSeedWords);
+        }
+    }
+    return QString::fromStdString(problem);
 }
 
 }  // namespace
@@ -148,14 +191,14 @@ void offer_wallet(Session& session, QWidget* parent) {
     } else if (!p.launched) {
         network_note = QStringLiteral("\n\nMainnet hasn't launched: this chain is a preview, and its coins will be thrown away.");
     } else {
-        network_note = QStringLiteral("\n\nThis is mainnet: keep the seed safe, it's the only way back to your coins.");
+        network_note = QStringLiteral("\n\nThis is mainnet: keep the 24 words safe, they're the only way back to your coins.");
     }
     box.setInformativeText(QStringLiteral("A wallet holds the keys to your coins. It lives in this app's data folder, encrypted "
-                                          "with a passphrase, and all of its keys come from one seed you write down.") +
+                                          "with a passphrase, and all of its keys come from 24 words you write down.") +
                            network_note);
     QPushButton* create = box.addButton(QStringLiteral("Create a new wallet"), QMessageBox::AcceptRole);
     create->setObjectName(QStringLiteral("primary"));
-    QPushButton* restore = box.addButton(QStringLiteral("Restore from a seed"), QMessageBox::ActionRole);
+    QPushButton* restore = box.addButton(QStringLiteral("Restore from 24 words"), QMessageBox::ActionRole);
     box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() == create) create_wallet(session, parent);
@@ -166,13 +209,13 @@ void create_wallet(Session& session, QWidget* parent) {
     QString passphrase = new_passphrase(
         parent, QStringLiteral("Create a wallet"),
         QStringLiteral("Choose a passphrase. It encrypts the wallet on this computer and is asked for whenever you "
-                       "spend. If you forget it, only the seed (shown next) can bring the coins back."));
+                       "spend. If you forget it, only the wallet's 24 words (shown next) can bring the coins back."));
     if (passphrase.isEmpty()) return;
     QPointer<QWidget> owner(parent);
     session.rpc().call(
         "createwallet", json::array({passphrase.toStdString()}), &session,
         [&session, owner](const json& result) {
-            show_seed(owner, text_of(result, "seed"), true);
+            show_seed(owner, text_of(result, "words"), true);
             session.refresh();
         },
         [owner](const RpcFailure& f) { Session::show_error(owner, QStringLiteral("Can't create the wallet"), f); });
@@ -183,12 +226,14 @@ void restore_wallet(Session& session, QWidget* parent) {
     QDialog dialog(parent);
     dialog.setWindowTitle(QStringLiteral("Restore a wallet"));
     auto* layout = new QVBoxLayout(&dialog);
-    layout->addWidget(muted_label(QStringLiteral("Type the wallet's seed: 64 hexadecimal digits (spaces and line breaks "
-                                                 "don't matter). The node then scans the whole chain for its coins."),
+    layout->addWidget(muted_label(QStringLiteral("Type the wallet's 24 words in order, with spaces or line breaks between "
+                                                 "them. A backup from before version 1.0 is 64 hexadecimal digits instead: "
+                                                 "type those. The node then scans the whole chain for the wallet's coins."),
                                   &dialog));
     auto* seed_field = new QPlainTextEdit(&dialog);
     seed_field->setFont(mono_font());
-    seed_field->setFixedHeight(70);
+    seed_field->setFixedHeight(90);
+    seed_field->setMinimumWidth(460);
     layout->addWidget(seed_field);
     auto* problem = new QLabel(&dialog);
     problem->setStyleSheet(QStringLiteral("color: %1;").arg(colors().negative.name()));
@@ -197,15 +242,9 @@ void restore_wallet(Session& session, QWidget* parent) {
     buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("primary"));
     buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Next"));
     layout->addWidget(buttons);
-    const auto cleaned = [seed_field] {
-        return seed_field->toPlainText().remove(QRegularExpression(QStringLiteral("\\s"))).toLower();
-    };
     const auto check = [&] {
-        const QString seed = cleaned();
-        const bool hex = QRegularExpression(QStringLiteral("^[0-9a-f]*$")).match(seed).hasMatch();
-        const QString why = !hex ? QStringLiteral("Only the digits 0-9 and letters a-f.")
-                            : seed.size() != 64 ? QStringLiteral("%1 of 64 digits.").arg(seed.size())
-                                                : QString();
+        const QString text = seed_field->toPlainText();
+        const QString why = text.trimmed().isEmpty() ? QStringLiteral("0 of %1 words.").arg(kSeedWords) : seed_status(text);
         problem->setText(why);
         buttons->button(QDialogButtonBox::Ok)->setEnabled(why.isEmpty());
     };
@@ -214,7 +253,7 @@ void restore_wallet(Session& session, QWidget* parent) {
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     check();
     if (dialog.exec() != QDialog::Accepted) return;
-    QString seed = cleaned();
+    QString seed = seed_field->toPlainText().simplified();  // the words, one space apart (hex: spaces don't matter)
     seed_field->clear();
 
     QString passphrase = new_passphrase(parent, QStringLiteral("Restore a wallet"),
@@ -241,17 +280,20 @@ void restore_wallet(Session& session, QWidget* parent) {
 
 void show_seed(QWidget* parent, const QString& seed, bool fresh) {
     SeedDialog dialog(parent);
-    dialog.setWindowTitle(QStringLiteral("Your wallet's seed"));
+    dialog.setWindowTitle(QStringLiteral("Your wallet's 24 words"));
     auto* layout = new QVBoxLayout(&dialog);
     layout->addWidget(new QLabel(
-        fresh ? QStringLiteral("<b>Write this seed down</b> and keep it somewhere safe, offline.")
-              : QStringLiteral("<b>Your wallet's seed.</b> Keep it somewhere safe, offline."),
+        fresh ? QStringLiteral("<b>Write these 24 words down</b>, in order, and keep them somewhere safe, offline.")
+              : QStringLiteral("<b>Your wallet's 24 words.</b> Keep them somewhere safe, offline."),
         &dialog));
-    layout->addWidget(muted_label(QStringLiteral("Every key of the wallet comes from it: with the seed, the wallet can be "
-                                                 "restored on any computer. Anyone who sees it can take your coins, so "
-                                                 "never type it into a website or send it to anyone."),
+    layout->addWidget(muted_label(QStringLiteral("Every key of the wallet comes from them: with the words, the wallet can be "
+                                                 "restored on any computer. Anyone who sees them can take your coins, so "
+                                                 "never type them into a website or send them to anyone. Only BOUND's "
+                                                 "wallet restores BOUND coins from them: other wallets would open an empty "
+                                                 "wallet of their own."),
                                   &dialog));
-    auto* text = new QLabel(seed_grouped(seed), &dialog);
+    auto* text = new QLabel(words_table(seed), &dialog);
+    text->setTextFormat(Qt::RichText);
     text->setFont(mono_font(13));
     text->setTextInteractionFlags(Qt::TextSelectableByMouse);
     text->setAlignment(Qt::AlignCenter);
@@ -280,7 +322,7 @@ void backup_seed(Session& session, QWidget* parent) {
         session.rpc().call(
             "dumpseed", json::array(), &session,
             [owner, finish](const json& seed) {
-                show_seed(owner, QString::fromStdString(seed.get<std::string>()), false);
+                show_seed(owner, text_of(seed, "words"), false);
                 finish();
             },
             [owner, finish](const RpcFailure& f) {

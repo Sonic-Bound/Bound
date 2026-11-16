@@ -7,6 +7,7 @@
 #include "net/protocol.h"
 #include "util/hex.h"
 #include "util/serialize.h"
+#include "wallet/mnemonic.h"
 
 #include <sodium.h>
 
@@ -57,6 +58,16 @@ FeeRate parse_fee_rate(const RpcParams& p, std::size_t i) {
 Wallet& need_wallet(NodeContext& node) {
     if (!node.wallet) throw RpcError(rpc_error::kNoWallet, "no wallet: create one with createwallet, or restorewallet");
     return *node.wallet;
+}
+
+// Milestone 17: the seed as people write it down (24 words) and as before (hex).
+json seed_json(const Seed& seed) {
+    std::string words = seed_to_words(seed);
+    std::string hex = to_hex(seed);
+    json result = {{"words", words}, {"seed", hex}};
+    sodium_memzero(words.data(), words.size());
+    sodium_memzero(hex.data(), hex.size());
+    return result;
 }
 
 int code_for(WalletError::Kind kind) {
@@ -706,29 +717,36 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
 
     // Wallet.
     t.add("createwallet", "<passphrase>",
-          "Creates the wallet, encrypted with the passphrase, and returns its seed: write the seed down, it restores every key.", 1, 1,
-          wallet_method([&node](const RpcParams& p) -> json {
+          "Creates the wallet, encrypted with the passphrase, and returns its seed as 24 words (and as hex): write the "
+          "words down, they restore every key.",
+          1, 1, wallet_method([&node](const RpcParams& p) -> json {
               if (node.wallet_db == nullptr) throw RpcError(rpc_error::kWallet, "this node has nowhere to keep a wallet");
               if (node.wallet) throw RpcError(rpc_error::kWallet, "there's a wallet already");
               const std::string passphrase = p.str(0);
               if (passphrase.empty()) throw RpcError(rpc_error::kInvalidParameter, "the passphrase can't be empty");
               Seed seed = random_seed();
               node.wallet = Wallet::create(*node.wallet_db, node.chain, node.mempool, passphrase, seed, false, node.wallet_options);
-              const std::string hex = to_hex(seed);
+              json result = seed_json(seed);
               sodium_memzero(seed.data(), seed.size());
-              return {{"seed", hex}, {"warning", "Anyone with this seed can spend the wallet's coins; without it a lost wallet can't be restored."}};
+              result["warning"] = "Anyone with these words can spend the wallet's coins; without them a lost wallet can't be restored.";
+              return result;
           }));
-    t.add("restorewallet", "<seed> <passphrase>", "Creates the wallet from a seed and scans the whole chain for its coins.", 2, 2,
-          wallet_method([&node](const RpcParams& p) -> json {
+    t.add("restorewallet", "<words> <passphrase>",
+          "Creates the wallet from its seed (the 24 words in one argument, or the 64 hex digits versions before 1.0 "
+          "showed) and scans the whole chain for its coins.",
+          2, 2, wallet_method([&node](const RpcParams& p) -> json {
               if (node.wallet_db == nullptr) throw RpcError(rpc_error::kWallet, "this node has nowhere to keep a wallet");
               if (node.wallet) throw RpcError(rpc_error::kWallet, "there's a wallet already");
-              std::optional<Bytes> bytes = from_hex(p.str(0));
-              if (!bytes || bytes->size() != 32) throw RpcError(rpc_error::kInvalidParameter, "the seed must be 64 hex digits");
+              std::string problem;
+              std::optional<Seed> parsed = parse_seed(p.str(0), &problem);
+              if (!parsed) throw RpcError(rpc_error::kInvalidParameter, "the seed: " + problem);
               const std::string passphrase = p.str(1);
-              if (passphrase.empty()) throw RpcError(rpc_error::kInvalidParameter, "the passphrase can't be empty");
-              Seed seed;
-              std::copy(bytes->begin(), bytes->end(), seed.begin());
-              sodium_memzero(bytes->data(), bytes->size());
+              if (passphrase.empty()) {
+                  sodium_memzero(parsed->data(), parsed->size());
+                  throw RpcError(rpc_error::kInvalidParameter, "the passphrase can't be empty");
+              }
+              Seed seed = *parsed;
+              sodium_memzero(parsed->data(), parsed->size());
               node.wallet = Wallet::create(*node.wallet_db, node.chain, node.mempool, passphrase, seed, true, node.wallet_options);
               sodium_memzero(seed.data(), seed.size());
               return {{"transactions", node.wallet->transaction_count()}, {"balance", format_coins(node.wallet->balance().spendable)}};
@@ -844,12 +862,12 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
         need_wallet(node).change_passphrase(p.str(0), next);
         return nullptr;
     }));
-    t.add("dumpseed", "", "The wallet's seed, the backup of every key. Needs the wallet unlocked.", 0, 0,
-          wallet_method([&node](const RpcParams&) -> json {
+    t.add("dumpseed", "", "The wallet's seed, the backup of every key: its 24 words, and the same seed as hex. Needs the wallet unlocked.",
+          0, 0, wallet_method([&node](const RpcParams&) -> json {
               Seed seed = need_wallet(node).seed();
-              const std::string hex = to_hex(seed);
+              json result = seed_json(seed);
               sodium_memzero(seed.data(), seed.size());
-              return hex;
+              return result;
           }));
 }
 

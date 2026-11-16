@@ -7,9 +7,11 @@
 #include "rpc/server.h"
 #include "test_util.h"
 #include "util/base64.h"
+#include "wallet/mnemonic.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <optional>
@@ -420,7 +422,10 @@ TEST_F(NodeRpcTest, AWholeRoundTrip) {
     EXPECT_EQ(error_code("getblockcount", {1}), rpc_error::kInvalidParams);
     const json created = call("createwallet", {"secret"});
     const std::string seed = created["seed"];
+    const std::string words = created["words"];  // milestone 17: the same seed, as people write it down
     EXPECT_EQ(seed.size(), 64u);
+    EXPECT_EQ(std::count(words.begin(), words.end(), ' '), 23);
+    EXPECT_EQ(parse_seed(words), parse_seed(seed));
     EXPECT_EQ(error_code("createwallet", {"again"}), rpc_error::kWallet);
 
     const std::string mine_to = call("getnewaddress");
@@ -476,7 +481,7 @@ TEST_F(NodeRpcTest, AWholeRoundTrip) {
     EXPECT_TRUE(call("walletlock").is_null());
     EXPECT_EQ(error_code("dumpseed"), rpc_error::kUnlockNeeded);
     call("walletpassphrase", {"secret", 60});
-    EXPECT_EQ(call("dumpseed"), seed);
+    EXPECT_EQ(call("dumpseed"), (json{{"words", words}, {"seed", seed}}));
     EXPECT_EQ(call("getblockchaininfo")["blocks"], 102);
 
     // The seed brings everything back in another wallet.
@@ -485,7 +490,10 @@ TEST_F(NodeRpcTest, AWholeRoundTrip) {
     other.wallet_options.kdf = kTestKdf;
     RpcTable other_table;
     register_node_methods(other_table, other);
-    const json restored = other_table.call(json{{"id", 1}, {"method", "restorewallet"}, {"params", {seed, "other"}}});
+    const json misspelt = other_table.call(json{{"id", 1}, {"method", "restorewallet"}, {"params", {"abandon ability abel", "other"}}});
+    EXPECT_EQ(misspelt["error"]["code"], rpc_error::kInvalidParameter);
+    EXPECT_EQ(misspelt["error"]["message"], "the seed: Word 3, \"abel\", isn't one of the seed words.");
+    const json restored = other_table.call(json{{"id", 1}, {"method", "restorewallet"}, {"params", {words, "other"}}});
     EXPECT_EQ(restored["result"]["balance"], call("getbalance"));
     // 102 coinbases and the replacement; the replaced original never made it into the chain.
     EXPECT_EQ(restored["result"]["transactions"], 103);

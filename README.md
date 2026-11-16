@@ -44,8 +44,8 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
   where it stopped, even after a crash.
 - **Payments.** They wait in each node's mempool until a block takes the best-paying ones. A
   higher fee can replace one (full RBF).
-- **Wallet.** Every key comes from one seed, which is encrypted under a passphrase (Argon2id +
-  XChaCha20-Poly1305). It sends, receives and bumps fees.
+- **Wallet.** Every key comes from one seed, written down as 24 words (BIP39's list) and kept
+  encrypted under a passphrase (Argon2id + XChaCha20-Poly1305). It sends, receives and bumps fees.
 - **Desktop app.** `bound-qt` is a full node with a window, like Bitcoin-Qt. It has a wallet,
   payments, mining at the press of a button, the peers and an RPC console.
 - **Defences.** A peer that breaks a rule is turned away for a day, and operators can ban
@@ -193,6 +193,7 @@ one to `bound-cli`, `bound-qt` and `bound-explorer`.
 | 14 | Launch infrastructure: `bound-server`, per-network services, explorer `/health`, ARM packages | tools ✅ [notes](docs/milestone-14.md); servers: 2 of 3 up, [explorer](https://explorer.bound.sarl) and 2 DNS seeders live |
 | 15 | Mainnet launch: difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | launched 16/Nov/2026 ✅ [notes](docs/milestone-15.md), [launch day](docs/launch-day.md) |
 | 16 | BoundHash: BOUND's own memory-hard proof of work; the testnet started over on it | ✅ [notes](docs/milestone-16.md), [spec](docs/boundhash.md) |
+| 17 | The wallet's backup as 24 words | ✅ [notes](docs/milestone-17.md) |
 
 ## Layout
 

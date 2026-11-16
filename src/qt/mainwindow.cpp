@@ -148,7 +148,7 @@ MainWindow::MainWindow(NodeHost& host, QWidget* parent)
 
 void MainWindow::build_menus() {
     QMenu* file = menuBar()->addMenu(QStringLiteral("&File"));
-    file->addAction(QStringLiteral("&Back up the seed..."), this, [this] { backup_seed(session_, this); });
+    file->addAction(QStringLiteral("&Back up the 24 words..."), this, [this] { backup_seed(session_, this); });
     file->addAction(QStringLiteral("&Change the passphrase..."), this, [this] { change_passphrase(session_, this); });
     file->addAction(QStringLiteral("&Lock the wallet now"), this, [this] {
         rpc_.call("walletlock", json::array(), this, [this](const json&) { refresh(); });

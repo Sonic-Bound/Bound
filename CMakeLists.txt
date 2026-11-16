@@ -137,6 +137,9 @@ add_library(bound_core STATIC
   src/core/genesis.cpp
   # milestone 16
   src/core/boundhash.cpp
+  # milestone 17
+  src/wallet/mnemonic.cpp
+  src/wallet/wordlist.cpp
 )
 target_include_directories(bound_core PUBLIC src)
 target_link_libraries(bound_core PUBLIC bound_version unofficial-sodium::sodium nlohmann_json::nlohmann_json Threads::Threads PRIVATE leveldb::leveldb)
@@ -228,6 +231,8 @@ add_executable(bound_tests
   tests/test_genesis.cpp
   # milestone 16
   tests/test_boundhash.cpp
+  # milestone 17
+  tests/test_mnemonic.cpp
 )
 target_link_libraries(bound_tests PRIVATE bound_core leveldb::leveldb GTest::gtest GTest::gtest_main)
 # Milestone 11: test vectors read at run time (tests/data).
