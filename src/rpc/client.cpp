@@ -23,7 +23,7 @@ constexpr Convert kConvert[] = {
     {"generatetoaddress", 0}, {"listtransactions", 0}, {"sendtoaddress", 2},     {"bumpfee", 1},
     {"walletpassphrase", 1}, {"setban", 2},           {"gettxout", 1},          {"gettxout", 2},
     {"getaddressdeltas", 1}, {"getaddressdeltas", 2}, {"getaddressutxos", 1},   {"getaddressutxos", 2},
-    {"getnetworkhashps", 0}, {"setmining", 0},        {"setmining", 2},
+    {"getnetworkhashps", 0}, {"setmining", 0},        {"setmining", 2},         {"sendall", 1},
 };
 
 }  // namespace

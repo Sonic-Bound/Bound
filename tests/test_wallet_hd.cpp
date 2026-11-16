@@ -221,6 +221,30 @@ TEST_F(HdWalletTest, NotEnoughMoney) {
     EXPECT_EQ(mempool.find(all.txid())->fee, 251);
 }
 
+// Milestone 18: the wallet app's Max sends every coin, the fee taken out of the amount.
+TEST_F(HdWalletTest, SendingEverything) {
+    mine(wallet->new_address());
+    mine(wallet->new_address());
+    mine(stranger, 100);
+    unlock();
+    EXPECT_EQ(wallet->balance().spendable, 10 * kCoin);
+    const Transaction tx = wallet->create_sweep(bob, FeeRate{1000}, bytes_of("all"));
+    ASSERT_EQ(tx.inputs.size(), 2u);
+    ASSERT_EQ(tx.outputs.size(), 1u);
+    ASSERT_EQ(tx.serialize().size(), 254u);  // 2 in, 1 out, a 3-byte memo
+    EXPECT_EQ(tx.outputs[0].recipient, bob);
+    EXPECT_EQ(tx.outputs[0].amount, 10 * kCoin - 254);
+    ASSERT_TRUE(mempool.accept(tx, kTestNow).accepted());
+    EXPECT_EQ(mempool.find(tx.txid())->fee, 254);
+    EXPECT_EQ(wallet->balance().spendable, 0);
+    try {
+        wallet->create_sweep(bob, FeeRate{1000});
+        FAIL() << "swept an empty wallet";
+    } catch (const WalletError& e) {
+        EXPECT_EQ(e.kind, WalletError::Kind::InsufficientFunds);
+    }
+}
+
 TEST_F(HdWalletTest, IncomingPaymentsShowUnconfirmedThenConfirmed) {
     const KeyPair alice = test_key("alice");
     mine(alice.public_key());

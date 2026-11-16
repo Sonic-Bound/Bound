@@ -159,6 +159,10 @@ public:
     // it when it gets in. Throws WalletError: Locked, Invalid (amount below the dust limit),
     // InsufficientFunds.
     Transaction create_payment(const PublicKey& to, Amount amount, FeeRate rate, ByteSpan memo = {});
+    // Milestone 18 (the wallet app's Max): every spendable coin to `to` in one output, the fee taken
+    // out of it; the biggest coins first if they don't all fit in one standard transaction. Throws
+    // WalletError: Locked, Invalid (memo), InsufficientFunds (under the dust limit after the fee).
+    Transaction create_sweep(const PublicKey& to, FeeRate rate, ByteSpan memo = {});
     // A replacement for our own `txid`, still in the mempool: the same inputs and payments, the
     // change cut (more coins added if needed) to pay `rate`, and enough to beat the original and
     // everything built on it, as full replace-by-fee requires. Throws WalletError.

@@ -17,7 +17,7 @@ endif()
 
 # The one place BOUND's version is set (milestone 13): --version, the user agent peers see, the
 # Windows file properties and the release packages all take it from here.
-project(bound VERSION 1.0.0 LANGUAGES CXX)
+project(bound VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -286,6 +286,12 @@ if(BOUND_GUI AND Qt6_FOUND)
     src/qt/console.cpp
     src/qt/mainwindow.cpp
     src/qt/bound.qrc
+    # milestone 18
+    src/qt/contacts.cpp
+    src/qt/contactspage.cpp
+    src/qt/icons.cpp
+    src/qt/qr.cpp
+    src/qt/qrcodegen/qrcodegen.cpp
   )
   set_target_properties(bound_gui PROPERTIES AUTOMOC ON AUTORCC ON)
   target_link_libraries(bound_gui PUBLIC bound_core Qt6::Widgets)
@@ -369,4 +375,8 @@ if(DEFINED VCPKG_INSTALLED_DIR)
       install(FILES "${copyright}" DESTINATION ${bound_install_doc}/licenses RENAME ${port}.txt)
     endif()
   endforeach()
+endif()
+# Milestone 18: the QR code library built into the wallet app (src/qt/qrcodegen, MIT).
+if(TARGET bound-qt)
+  install(FILES src/qt/qrcodegen/LICENSE.txt DESTINATION ${bound_install_doc}/licenses RENAME qrcodegen.txt)
 endif()

@@ -825,6 +825,23 @@ void register_node_methods(RpcTable& t, NodeContext& node) {
               if (!r.accepted()) throw RpcError(rpc_error::kWallet, "the mempool refused the payment: " + r.reason);
               return tx.txid().to_hex();
           }));
+    // Milestone 18: the wallet app's Max.
+    t.add("sendall", "<address> [fee_rate] [memo]",
+          "Pays everything the wallet can spend to an address, the fee taken out of it, and returns the txid, the "
+          "amount sent and the fee. fee_rate as for sendtoaddress. Needs the wallet unlocked.",
+          1, 3, wallet_method([&node, block_budget](const RpcParams& p) -> json {
+              Wallet& w = need_wallet(node);
+              const PublicKey to = parse_address(p.str(0), node.chain.params());
+              const FeeRate rate = p.has(1) ? parse_fee_rate(p, 1) : node.mempool.next_block_fee_rate(block_budget);
+              const std::string memo = p.opt_str(2).value_or("");
+              const Transaction tx = w.create_sweep(to, rate, bytes_of(memo));
+              const MempoolAccept r = node.peers.submit_transaction(tx, node.clock());
+              if (!r.accepted()) throw RpcError(rpc_error::kWallet, "the mempool refused the payment: " + r.reason);
+              const MempoolEntry* entry = node.mempool.find(tx.txid());
+              return {{"txid", tx.txid().to_hex()},
+                      {"amount", format_coins(tx.outputs.at(0).amount)},
+                      {"fee", format_coins(entry != nullptr ? entry->fee : 0)}};
+          }));
     t.add("bumpfee", "<txid> [fee_rate]",
           "Replaces one of the wallet's unconfirmed transactions with one paying a higher fee (full RBF). fee_rate is in "
           "units per byte; by default, whatever makes the next block (and at least 1 more than the original). Needs the "

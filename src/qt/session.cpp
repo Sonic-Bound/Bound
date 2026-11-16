@@ -1,5 +1,6 @@
 #include "qt/session.h"
 
+#include "core/address.h"
 #include "qt/dialogs.h"
 #include "qt/nodehost.h"
 
@@ -12,7 +13,17 @@
 
 namespace bound::gui {
 
-Session::Session(Rpc& rpc, NodeHost& host, QObject* parent) : QObject(parent), rpc_(rpc), host_(host) {}
+Session::Session(Rpc& rpc, NodeHost& host, QObject* parent)
+    : QObject(parent), rpc_(rpc), host_(host), contacts_(settings_file()) {}
+
+QString Session::who(const QString& address) const {
+    if (const std::optional<QString> name = contacts_.name_for(address)) return QStringLiteral("%1 (%2)").arg(*name, address);
+    return address;
+}
+
+bool Session::valid_address(const QString& address) const {
+    return decode_address(address.trimmed().toStdString(), params().address_version).has_value();
+}
 
 QString Session::settings_file() const {
     return QString::fromStdU16String((host_.datadir() / "bound-qt.ini").u16string());

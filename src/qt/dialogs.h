@@ -3,6 +3,8 @@
 // The wallet app's dialogs: passphrases, creating and restoring a wallet, the seed, one
 // transaction in detail, and About.
 
+#include "qt/contacts.h"
+
 #include <QString>
 
 #include <optional>
@@ -28,5 +30,9 @@ void change_passphrase(Session& session, QWidget* parent);
 
 void show_transaction(Session& session, QWidget* parent, const QString& txid);
 void show_about(QWidget* parent);
+
+// Milestone 18: a contact's name and address, checked; nullopt if the user cancelled. `contact`
+// fills the fields in (an empty name: a new contact).
+std::optional<Contact> edit_contact(const Session& session, QWidget* parent, const Contact& contact);
 
 }  // namespace bound::gui

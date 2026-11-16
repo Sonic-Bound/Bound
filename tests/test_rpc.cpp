@@ -540,6 +540,23 @@ TEST_F(NodeRpcTest, MiningSwitchedOnAndOff) {
     EXPECT_EQ(call("validateaddress", json::array({mine["address"]}))["ismine"], true);
 }
 
+// Milestone 18: the wallet app's Max button.
+TEST_F(NodeRpcTest, SendAllEmptiesTheWallet) {
+    call("createwallet", {"secret"});
+    const std::string mine_to = call("getnewaddress");
+    call("generatetoaddress", {101, mine_to});
+    EXPECT_EQ(call("getbalance"), "10.00000000");
+    const std::string bob = encode_address(test_key("bob").public_key(), params.address_version);
+    EXPECT_EQ(error_code("sendall", {bob}), rpc_error::kUnlockNeeded);
+    call("walletpassphrase", {"secret", 60});
+    const json sent = call("sendall", {bob, 1});
+    EXPECT_EQ(sent["amount"], "9.99999749");  // 2 inputs and 1 output: 251 bytes at 1 unit a byte
+    EXPECT_EQ(sent["fee"], "0.00000251");
+    EXPECT_EQ(call("getrawmempool"), json::array({sent["txid"]}));
+    EXPECT_EQ(call("getbalance"), "0.00000000");
+    EXPECT_EQ(error_code("sendall", {bob}), rpc_error::kInsufficientFunds);
+}
+
 // Milestone 9, for the wallet app: listtransactions says who each payment went to or came from.
 TEST_F(NodeRpcTest, TransactionsShowTheirAddress) {
     call("createwallet", {"secret"});

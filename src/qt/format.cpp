@@ -30,10 +30,62 @@ std::optional<Amount> amount_of(const json& j, const char* key) {
     return parse_coins(found->get<std::string>());
 }
 
-QString coins_text(Amount amount, bool sign) {
+QString amount_text(Amount amount) {
     QString text = QString::fromStdString(format_coins(amount));
+    // Milestone 18: no zeros after the second decimal that say nothing: 5.00, 1.50, 0.00000191.
+    const qsizetype point = text.indexOf(QLatin1Char('.'));
+    if (point >= 0) {
+        while (text.size() > point + 3 && text.endsWith(QLatin1Char('0'))) text.chop(1);
+    }
+    return text;
+}
+
+QString coins_text(Amount amount, bool sign) {
+    QString text = amount_text(amount);
     if (sign && amount > 0) text.prepend(QLatin1Char('+'));
     return text + QLatin1Char(' ') + QString::fromUtf8(kTicker.data(), static_cast<qsizetype>(kTicker.size()));
+}
+
+QString payment_link(const QString& address, std::optional<Amount> amount) {
+    QString link = QStringLiteral("bound:") + address;
+    if (amount) {
+        QString number = QString::fromStdString(format_coins(*amount));
+        while (number.endsWith(QLatin1Char('0'))) number.chop(1);
+        if (number.endsWith(QLatin1Char('.'))) number.chop(1);
+        link += QStringLiteral("?amount=") + number;
+    }
+    return link;
+}
+
+std::optional<PaymentRequest> parse_payment_link(const QString& text) {
+    const QString link = text.trimmed();
+    if (!link.startsWith(QStringLiteral("bound:"), Qt::CaseInsensitive)) return std::nullopt;
+    const QString rest = link.mid(6);
+    const qsizetype query = rest.indexOf(QLatin1Char('?'));
+    PaymentRequest request;
+    request.address = query < 0 ? rest : rest.left(query);
+    if (request.address.isEmpty()) return std::nullopt;
+    if (query >= 0) {
+        for (const QString& pair : rest.mid(query + 1).split(QLatin1Char('&'), Qt::SkipEmptyParts)) {
+            const qsizetype eq = pair.indexOf(QLatin1Char('='));
+            const QString key = (eq < 0 ? pair : pair.left(eq)).toLower();
+            const QString value = eq < 0 ? QString() : pair.mid(eq + 1);
+            if (key == QLatin1String("amount")) {
+                const std::optional<Amount> amount = parse_coins(value.toStdString());
+                if (!amount || *amount <= 0) return std::nullopt;
+                request.amount = amount;
+            } else if (key.startsWith(QLatin1String("req-"))) {
+                return std::nullopt;  // as BIP21: a required parameter this app doesn't know
+            }
+        }
+    }
+    return request;
+}
+
+std::optional<QString> explorer_tx_url(std::string_view network, const QString& txid) {
+    if (network == "mainnet") return QStringLiteral("https://explorer.bound.sarl/tx/") + txid;
+    if (network == "testnet") return QStringLiteral("https://testnet-explorer.bound.sarl/tx/") + txid;
+    return std::nullopt;
 }
 
 QString date_text(std::int64_t unix_time) {

@@ -20,8 +20,10 @@ The programs
 
 
 Getting started
-  Windows: double-click bound-qt.exe. The programs aren't code-signed yet, so Windows may say
-  "Windows protected your PC". Check the download first (below), then choose More info, Run anyway.
+  Windows: this folder runs as it is: double-click bound-qt.exe. To install BOUND instead, with a
+  Start menu entry and an uninstaller, run bound-<version>-win64-setup.exe from the release page.
+  The programs aren't code-signed yet, so Windows may say "Windows protected your PC". Check the
+  download first (below), then choose More info, Run anyway.
   To mine, open Mining and press Start mining.
 
   Linux: bin/boundd node starts a node; bin/bound-cli getblockchaininfo shows how far it has synced.
@@ -53,4 +55,4 @@ Licenses
   BOUND is under the MIT license (LICENSE). The libraries built into it keep their own licenses,
   in licenses/: libsodium (ISC), LevelDB and Snappy (BSD 3-clause) and nlohmann/json (MIT). The
   Windows package also has Qt (LGPL v3), and zlib, libpng, PCRE2 and double-conversion, which Qt
-  uses.
+  uses, and the wallet app has Project Nayuki's QR Code generator (MIT).

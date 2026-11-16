@@ -3,6 +3,8 @@
 #   dist\bound-<version>-win64.zip    a folder, bound-<version>, holding bound-qt.exe, boundd.exe,
 #                                     bound-cli.exe, bound-explorer.exe, bound-seeder.exe and every
 #                                     DLL they need, so it runs on a PC with nothing installed
+#   dist\bound-<version>-win64-setup.exe  milestone 18: the same programs as an installer (Start
+#                                     menu, uninstaller), if Inno Setup 6 is installed
 #
 # Run it at the repository's root, from Developer PowerShell for VS 2022 (the release workflow does
 # the same on GitHub):
@@ -15,7 +17,9 @@
 param(
     [string]$OutDir = "dist",
     [string]$BuildDir = "build\package",
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    # The release workflow's: no installer is an error, not a skip.
+    [switch]$RequireInstaller
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 3
@@ -138,3 +142,43 @@ try {
 }
 $hash = (Get-FileHash (Join-Path $OutDir $zip) -Algorithm SHA256).Hash.ToLower()
 Write-Host "$hash  $zip"
+
+# Milestone 18: the installer, made by Inno Setup from the same folder, then tried: installed for
+# this user into a folder of its own, run, and uninstalled.
+function Find-Iscc {
+    $found = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($found) { return $found.Source }
+    foreach ($dir in "${env:ProgramFiles(x86)}\Inno Setup 6", "$env:ProgramFiles\Inno Setup 6", "$env:LOCALAPPDATA\Programs\Inno Setup 6") {
+        if (Test-Path "$dir\ISCC.exe") { return "$dir\ISCC.exe" }
+    }
+    return $null
+}
+$iscc = Find-Iscc
+if (-not $iscc) {
+    if ($RequireInstaller) { throw "Inno Setup 6 isn't installed (no ISCC.exe): https://jrsoftware.org/isdl.php" }
+    Write-Host "== No installer: Inno Setup 6 isn't installed (https://jrsoftware.org/isdl.php)"
+} else {
+    Write-Host "== Building the installer"
+    Invoke-Checked $iscc /Q "/DAppVersion=$version" "/DPackageDir=$stage" "/DOutputDir=$OutDir" contrib\release\bound.iss
+    $setupName = "$name-win64-setup.exe"
+    $setup = Join-Path $OutDir $setupName
+    if (-not (Test-Path $setup)) { throw "Inno Setup made no $setupName" }
+
+    Write-Host "== Checking the installer: install, run, uninstall"
+    $target = Join-Path ([IO.Path]::GetTempPath()) "bound-setup-check-$PID"
+    $install = Start-Process -FilePath $setup -Wait -PassThru `
+        -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$target`""
+    if ($install.ExitCode -ne 0) { throw "the installer failed (exit code $($install.ExitCode))" }
+    $line = @(Invoke-Checked "$target\boundd.exe" --version)[0]
+    if (-not "$line".StartsWith("boundd $version")) { throw "the installed boundd --version said: $line" }
+    Write-Host "   installed into ${target}: $line"
+    $uninstall = Start-Process -FilePath "$target\unins000.exe" -Wait -PassThru -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+    if ($uninstall.ExitCode -ne 0) { throw "the uninstaller failed (exit code $($uninstall.ExitCode))" }
+    # The uninstaller carries on from a copy of itself after the first one exits.
+    for ($i = 0; $i -lt 60 -and (Test-Path "$target\boundd.exe"); $i++) { Start-Sleep -Seconds 1 }
+    if (Test-Path "$target\boundd.exe") { throw "uninstalling left boundd.exe behind" }
+    Write-Host "   uninstalled"
+    if (Test-Path $target) { Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue }
+    $setupHash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+    Write-Host "$setupHash  $setupName"
+}

@@ -47,7 +47,8 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
 - **Wallet.** Every key comes from one seed, written down as 24 words (BIP39's list) and kept
   encrypted under a passphrase (Argon2id + XChaCha20-Poly1305). It sends, receives and bumps fees.
 - **Desktop app.** `bound-qt` is a full node with a window, like Bitcoin-Qt. It has a wallet,
-  payments, mining at the press of a button, the peers and an RPC console.
+  payments with contacts and Slow/Normal/Fast fees, a QR code to receive, mining at the press of a
+  button, the peers and an RPC console.
 - **Defences.** A peer that breaks a rule is turned away for a day, and operators can ban
   addresses. Floods of low-work headers, unrequested blocks, requests or addresses can't stall or
   swamp a node. Every push is tested under AddressSanitizer, UndefinedBehaviorSanitizer and
@@ -61,10 +62,11 @@ Everything is written here, the way Bitcoin Core does it, rather than borrowed f
 
 ## Download
 
-Ready-made packages for Windows (the wallet app and the command-line programs) and Linux (x86-64 and
-64-bit ARM) are on the
-[releases page](https://github.com/Sonic-Bound/Bound/releases). Unzip and run: nothing else to
-install. Each release lists the files' SHA-256 checksums, and GitHub attests that its own build
+Ready-made packages for Windows (an installer, or a zip of the wallet app and the command-line
+programs) and Linux (x86-64 and 64-bit ARM) are on the
+[releases page](https://github.com/Sonic-Bound/Bound/releases). On Windows, run
+`bound-<version>-win64-setup.exe` and start BOUND from the Start menu; elsewhere, unpack and run:
+nothing else to install. Each release lists the files' SHA-256 checksums, and GitHub attests that its own build
 servers made every file from the tagged source: check one with
 `gh attestation verify <file> --repo Sonic-Bound/Bound`. Releases are made the way
 [docs/release-process.md](docs/release-process.md) describes.
@@ -194,6 +196,7 @@ one to `bound-cli`, `bound-qt` and `bound-explorer`.
 | 15 | Mainnet launch: difficulty 1, mainnet's seeds, `boundd genesis` on every core, the launch runbook | launched 16/Nov/2026 ✅ [notes](docs/milestone-15.md), [launch day](docs/launch-day.md) |
 | 16 | BoundHash: BOUND's own memory-hard proof of work; the testnet started over on it | ✅ [notes](docs/milestone-16.md), [spec](docs/boundhash.md) |
 | 17 | The wallet's backup as 24 words | ✅ [notes](docs/milestone-17.md) |
+| 18 | A Windows installer; the wallet app's new look, QR codes, contacts, Max and Slow/Normal/Fast fees | ✅ [notes](docs/milestone-18.md) |
 
 ## Layout
 

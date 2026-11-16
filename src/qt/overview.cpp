@@ -1,13 +1,19 @@
 #include "qt/dialogs.h"
 #include "qt/format.h"
+#include "qt/icons.h"
 #include "qt/pages.h"
 #include "qt/style.h"
 
 #include <QDateTime>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QMouseEvent>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
+
+#include <functional>
+#include <utility>
 
 namespace bound::gui {
 
@@ -24,6 +30,31 @@ QLabel* value_label(QWidget* parent, const char* object_name = nullptr) {
     if (object_name != nullptr) label->setObjectName(QString::fromLatin1(object_name));
     label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     return label;
+}
+
+// Milestone 18: one recent transaction, which opens its details when clicked.
+class TxRow : public QFrame {
+public:
+    TxRow(std::function<void()> open, QWidget* parent) : QFrame(parent), open_(std::move(open)) {
+        setObjectName(QStringLiteral("txRow"));
+        setCursor(Qt::PointingHandCursor);
+        setToolTip(QStringLiteral("Details"));
+    }
+
+protected:
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint())) open_();
+        QFrame::mouseReleaseEvent(event);
+    }
+
+private:
+    std::function<void()> open_;
+};
+
+Glyph glyph_for(const QString& category) {
+    if (category == QLatin1String("send")) return Glyph::Sent;
+    if (category == QLatin1String("receive")) return Glyph::Received;
+    return Glyph::Mined;
 }
 
 }  // namespace
@@ -59,6 +90,22 @@ OverviewPage::OverviewPage(Session& session, QWidget* parent) : QWidget(parent),
     b->addWidget(immature_, 3, 1, Qt::AlignRight);
     b->addWidget(muted_label(QStringLiteral("Total"), balances_), 4, 0);
     b->addWidget(total_, 4, 1, Qt::AlignRight);
+    // Milestone 18: the two things people come to the wallet for.
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(8);
+    auto* send = new QPushButton(QStringLiteral("Send"), balances_);
+    send->setObjectName(QStringLiteral("primary"));
+    send->setIcon(glyph_icon(Glyph::Send, Qt::white, Qt::white, 16));
+    auto* receive = new QPushButton(QStringLiteral("Receive"), balances_);
+    receive->setIcon(glyph_icon(Glyph::Receive, colors().text, colors().text, 16));
+    actions->addWidget(send);
+    actions->addWidget(receive);
+    actions->addStretch();
+    b->addLayout(actions, 5, 0, 1, 2);
+    b->setRowMinimumHeight(5, 44);
+    connect(send, &QPushButton::clicked, this, [this] { session_.pay(QString()); });
+    connect(receive, &QPushButton::clicked, this, [this] { session_.receive(); });
+    on_theme_change(receive, [receive] { receive->setIcon(glyph_icon(Glyph::Receive, colors().text, colors().text, 16)); });
     money_layout->addWidget(balances_);
 
     no_wallet_ = new QWidget(money);
@@ -68,11 +115,11 @@ OverviewPage::OverviewPage(Session& session, QWidget* parent) : QWidget(parent),
     auto* none = new QLabel(QStringLiteral("No wallet yet"), no_wallet_);
     none->setObjectName(QStringLiteral("mediumValue"));
     n->addWidget(none);
-    n->addWidget(muted_label(QStringLiteral("Create one to get an address and receive coins, or restore one from its seed."), no_wallet_));
+    n->addWidget(muted_label(QStringLiteral("Create one to get an address and receive coins, or restore one from its 24 words."), no_wallet_));
     auto* buttons = new QHBoxLayout;
     auto* create = new QPushButton(QStringLiteral("Create a wallet"), no_wallet_);
     create->setObjectName(QStringLiteral("primary"));
-    auto* restore = new QPushButton(QStringLiteral("Restore from a seed"), no_wallet_);
+    auto* restore = new QPushButton(QStringLiteral("Restore from 24 words"), no_wallet_);
     buttons->addWidget(create);
     buttons->addWidget(restore);
     buttons->addStretch();
@@ -109,8 +156,18 @@ OverviewPage::OverviewPage(Session& session, QWidget* parent) : QWidget(parent),
     // The latest transactions.
     QFrame* recent = card(this);
     recent_ = new QVBoxLayout(recent);
-    recent_->setContentsMargins(22, 18, 22, 18);
-    recent_->addWidget(card_title(QStringLiteral("Recent transactions"), recent));
+    recent_->setContentsMargins(16, 18, 16, 14);
+    recent_->setSpacing(4);
+    QLabel* recent_title = card_title(QStringLiteral("Recent transactions"), recent);
+    recent_title->setContentsMargins(6, 0, 0, 4);
+    recent_->addWidget(recent_title);
+    // The rows scroll rather than squeeze when the window is short.
+    scroll_ = new QScrollArea(recent);
+    scroll_->setWidgetResizable(true);
+    scroll_->setFrameShape(QFrame::NoFrame);
+    scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_->setStyleSheet(QStringLiteral("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }"));
+    recent_->addWidget(scroll_, 1);
     show_transactions(json::array());
     page->addWidget(recent, 1);
 }
@@ -129,44 +186,73 @@ void OverviewPage::show_wallet(const json& info) {
     total_->setText(coins_text(spendable + pending + immature));
 }
 
+void OverviewPage::restyle() {
+    shown_.clear();
+    show_transactions(list_);
+}
+
 void OverviewPage::show_transactions(const json& list) {
-    const std::string key = list.dump();
+    const std::string key = list.dump() + "/" + std::to_string(session_.contacts().version());
     if (rows_ != nullptr && key == shown_) return;
     shown_ = key;
-    delete rows_;
-    rows_ = new QWidget(this);
-    auto* grid = new QGridLayout(rows_);
-    grid->setContentsMargins(0, 6, 0, 0);
-    grid->setHorizontalSpacing(18);
-    grid->setVerticalSpacing(10);
-    int row = 0;
-    if (list.is_array()) {
-        for (auto it = list.rbegin(); it != list.rend() && row < 8; ++it, ++row) {
-            const json& tx = *it;
-            const QString category = text_of(tx, "category");
-            auto* type = new QLabel(category_text(category), rows_);
-            type->setStyleSheet(QStringLiteral("font-weight: 600;"));
-            const std::int64_t confirmations = int_of(tx, "confirmations");
-            auto* when = muted_label(date_text(int_of(tx, "time")) +
-                                         (confirmations == 0 ? QStringLiteral("  (unconfirmed)") : QString()),
-                                     rows_);
-            when->setWordWrap(false);
-            auto* address = muted_label(short_hash(text_of(tx, "address")), rows_);
-            address->setFont(mono_font());
-            const Amount amount = amount_of(tx, "amount").value_or(0);
-            auto* value = new QLabel(coins_text(amount, true), rows_);
-            value->setStyleSheet(QStringLiteral("color: %1; font-weight: 600;")
-                                     .arg((amount < 0 ? colors().negative : colors().positive).name()));
-            grid->addWidget(type, row, 0);
-            grid->addWidget(when, row, 1);
-            grid->addWidget(address, row, 2);
-            grid->addWidget(value, row, 3, Qt::AlignRight);
-        }
+    list_ = list.is_array() ? list : json::array();
+    rows_ = new QWidget;  // the scroll area deletes the one before when it takes this
+    auto* column = new QVBoxLayout(rows_);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->setSpacing(0);
+    int count = 0;
+    for (auto it = list_.rbegin(); it != list_.rend() && count < 12; ++it, ++count) {
+        const json& tx = *it;
+        const QString category = text_of(tx, "category");
+        const QString txid = text_of(tx, "txid");
+        auto* row = new TxRow([this, txid] { show_transaction(session_, this, txid); }, rows_);
+        row->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        auto* line = new QHBoxLayout(row);
+        line->setContentsMargins(6, 6, 6, 6);
+        line->setSpacing(12);
+        const Amount amount = amount_of(tx, "amount").value_or(0);
+        const QColor tone = category == QLatin1String("send") ? colors().negative
+                            : category == QLatin1String("receive") ? colors().positive
+                                                                   : colors().accent;
+        auto* icon = new QLabel(row);
+        icon->setPixmap(glyph_pixmap(glyph_for(category), tone, 20));
+        icon->setFixedSize(28, 28);
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setStyleSheet(QStringLiteral("background: %1; border-radius: 14px;").arg(colors().hover.name()));
+        line->addWidget(icon);
+
+        auto* what = new QVBoxLayout;
+        what->setSpacing(2);
+        auto* type = new QLabel(category_text(category), row);
+        type->setStyleSheet(QStringLiteral("font-weight: 600;"));
+        const std::int64_t confirmations = int_of(tx, "confirmations");
+        auto* when = muted_label(date_text(int_of(tx, "time")) + (confirmations == 0 ? QStringLiteral("  ·  unconfirmed") : QString()), row);
+        when->setWordWrap(false);
+        what->addWidget(type);
+        what->addWidget(when);
+        line->addLayout(what);
+
+        const QString address = text_of(tx, "address");
+        const std::optional<QString> name = session_.contacts().name_for(address);
+        auto* who = muted_label(name ? *name : short_hash(address), row);
+        who->setWordWrap(false);
+        if (!name) who->setFont(mono_font());
+        line->addWidget(who, 1, Qt::AlignRight | Qt::AlignVCenter);
+
+        auto* value = new QLabel(coins_text(amount, true), row);
+        value->setMinimumWidth(150);
+        value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        value->setStyleSheet(QStringLiteral("color: %1; font-weight: 600;").arg((amount < 0 ? colors().negative : colors().positive).name()));
+        line->addWidget(value);
+        column->addWidget(row);
     }
-    if (row == 0) grid->addWidget(muted_label(QStringLiteral("Nothing yet. Payments you send and receive show up here."), rows_), 0, 0);
-    grid->setColumnStretch(2, 1);
-    grid->setRowStretch(row + 1, 1);
-    recent_->addWidget(rows_, 1);
+    if (count == 0) {
+        QLabel* nothing = muted_label(QStringLiteral("Nothing yet. Payments you send and receive show up here."), rows_);
+        nothing->setContentsMargins(6, 6, 6, 6);
+        column->addWidget(nothing);
+    }
+    column->addStretch(1);
+    scroll_->setWidget(rows_);
 }
 
 void OverviewPage::show_status(const ChainStatus& s, const json& mining) {

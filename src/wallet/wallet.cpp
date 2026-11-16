@@ -551,6 +551,36 @@ Transaction Wallet::create_payment(const PublicKey& to, Amount amount, FeeRate r
     return sign(std::move(tx));
 }
 
+Transaction Wallet::create_sweep(const PublicKey& to, FeeRate rate, ByteSpan memo) {
+    unlocked_seed();
+    const MempoolOptions& policy = mempool_.options();
+    if (memo.size() > Transaction::kMaxMemo) throw WalletError(WalletError::Kind::Invalid, "the memo is over 100 bytes");
+    rate = std::max(rate, policy.min_relay_fee);
+
+    std::vector<WalletCoin> coins = this->coins();
+    std::erase_if(coins, [](const WalletCoin& c) { return !c.spendable; });
+    std::sort(coins.begin(), coins.end(), [](const WalletCoin& a, const WalletCoin& b) {
+        if (a.out.amount != b.out.amount) return a.out.amount > b.out.amount;
+        return a.op < b.op;
+    });
+    Transaction tx;
+    Amount total = 0;
+    for (const WalletCoin& coin : coins) {
+        if (transaction_size(tx.inputs.size() + 1, 1, memo.size()) > policy.max_tx_size) break;
+        tx.inputs.push_back(coin.op);
+        total += coin.out.amount;
+    }
+    const Amount fee = rate.fee(transaction_size(tx.inputs.size(), 1, memo.size()));
+    if (tx.inputs.empty() || total - fee < policy.dust_limit) {
+        throw WalletError(WalletError::Kind::InsufficientFunds,
+                          "insufficient funds: " + format_coins(total) + " spendable, which doesn't cover the fee and the " +
+                              format_coins(policy.dust_limit) + " an output needs");
+    }
+    tx.outputs.push_back({total - fee, to});
+    tx.memo.assign(memo.begin(), memo.end());
+    return sign(std::move(tx));
+}
+
 Transaction Wallet::create_bump(const uint256& txid, FeeRate rate) {
     unlocked_seed();
     const WalletTx* original = find(txid);

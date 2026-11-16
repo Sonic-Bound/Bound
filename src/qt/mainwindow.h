@@ -26,7 +26,7 @@ public:
     explicit MainWindow(NodeHost& host, QWidget* parent = nullptr);
 
     // For tests: the pages, in sidebar order, and whether the node has answered yet.
-    enum Page { Overview, Send, Receive, Transactions, Mining, Network, Console };
+    enum Page { Overview, Send, Receive, Contacts, Transactions, Mining, Network, Console };
     void show_page(Page page);
     QWidget* page(Page page) const;
     bool connected() const { return connected_; }
@@ -41,6 +41,7 @@ private:
                  std::function<void(const RpcFailure&)> failed = {});
     void finished_batch();
     void update_status();
+    void set_sidebar_icons();  // milestone 18
 
     NodeHost& host_;
     Rpc rpc_;
@@ -51,6 +52,7 @@ private:
     OverviewPage* overview_;
     SendPage* send_;
     ReceivePage* receive_;
+    ContactsPage* contacts_;
     TransactionsPage* transactions_;
     MiningPage* mining_;
     NetworkPage* network_;

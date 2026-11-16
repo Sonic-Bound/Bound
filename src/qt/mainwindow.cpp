@@ -3,6 +3,7 @@
 #include "app/datadir.h"
 #include "qt/dialogs.h"
 #include "qt/format.h"
+#include "qt/icons.h"
 #include "qt/style.h"
 
 #include <QApplication>
@@ -18,6 +19,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -80,8 +82,11 @@ MainWindow::MainWindow(NodeHost& host, QWidget* parent)
     side_layout->addWidget(brand(session_.params(), side));
     sidebar_ = new QListWidget(side);
     sidebar_->setObjectName(QStringLiteral("sidebar"));
-    sidebar_->addItems({QStringLiteral("Overview"), QStringLiteral("Send"), QStringLiteral("Receive"), QStringLiteral("Transactions"),
-                        QStringLiteral("Mining"), QStringLiteral("Network"), QStringLiteral("Console")});
+    sidebar_->addItems({QStringLiteral("Overview"), QStringLiteral("Send"), QStringLiteral("Receive"), QStringLiteral("Contacts"),
+                        QStringLiteral("Transactions"), QStringLiteral("Mining"), QStringLiteral("Network"), QStringLiteral("Console")});
+    sidebar_->setIconSize(QSize(18, 18));
+    sidebar_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    set_sidebar_icons();
     QFont side_font = sidebar_->font();
     side_font.setPointSizeF(side_font.pointSizeF() * 1.08);
     sidebar_->setFont(side_font);
@@ -96,11 +101,12 @@ MainWindow::MainWindow(NodeHost& host, QWidget* parent)
     overview_ = new OverviewPage(session_, stack_);
     send_ = new SendPage(session_, stack_);
     receive_ = new ReceivePage(session_, stack_);
+    contacts_ = new ContactsPage(session_, stack_);
     transactions_ = new TransactionsPage(session_, stack_);
     mining_ = new MiningPage(session_, stack_);
     network_ = new NetworkPage(session_, stack_);
     console_ = new ConsolePage(session_, stack_);
-    for (QWidget* w : std::initializer_list<QWidget*>{overview_, send_, receive_, transactions_, mining_, network_, console_}) {
+    for (QWidget* w : std::initializer_list<QWidget*>{overview_, send_, receive_, contacts_, transactions_, mining_, network_, console_}) {
         stack_->addWidget(w);
     }
     content_layout->addWidget(stack_);
@@ -140,6 +146,18 @@ MainWindow::MainWindow(NodeHost& host, QWidget* parent)
     });
 
     session_.refresh = [this] { QTimer::singleShot(150, this, [this] { refresh(); }); };
+    // Milestone 18: Overview's buttons and Contacts' Pay.
+    session_.pay = [this](const QString& address) {
+        send_->set_address(address);
+        show_page(Send);
+    };
+    session_.receive = [this] { show_page(Receive); };
+    // Milestone 18: when Windows switches between light and dark, what the pages painted themselves.
+    on_theme_change(this, [this] {
+        set_sidebar_icons();
+        overview_->restyle();
+        transactions_->fill();
+    });
     timer_ = new QTimer(this);
     connect(timer_, &QTimer::timeout, this, &MainWindow::refresh);
     timer_->start(kRefreshMs);
@@ -158,6 +176,14 @@ void MainWindow::build_menus() {
     QMenu* help = menuBar()->addMenu(QStringLiteral("&Help"));
     help->addAction(QStringLiteral("&About BOUND"), this, [this] { show_about(this); });
     help->addAction(QStringLiteral("About &Qt"), qApp, &QApplication::aboutQt);
+}
+
+void MainWindow::set_sidebar_icons() {
+    const Glyph glyphs[] = {Glyph::Overview, Glyph::Send,    Glyph::Receive, Glyph::Contacts,
+                            Glyph::Transactions, Glyph::Mining, Glyph::Network, Glyph::Console};
+    for (int i = 0; i < sidebar_->count() && i < static_cast<int>(std::size(glyphs)); ++i) {
+        sidebar_->item(i)->setIcon(glyph_icon(glyphs[i], colors().sidebar_text, Qt::white));
+    }
 }
 
 void MainWindow::show_page(Page p) { sidebar_->setCurrentRow(static_cast<int>(p)); }

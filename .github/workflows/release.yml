@@ -68,13 +68,18 @@ jobs:
           path: vcpkg-cache
           key: vcpkg-windows-gui-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'triplets/*') }}
           restore-keys: vcpkg-windows-gui-
+      - name: Inno Setup, for the installer (milestone 18)
+        shell: powershell
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { throw "Inno Setup didn't install" }
       - name: Build, test and package
         # Windows PowerShell 5.1, which the script is tested with.
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
-          powershell -NoProfile -ExecutionPolicy Bypass -File contrib\release\package-windows.ps1 -OutDir dist
+          powershell -NoProfile -ExecutionPolicy Bypass -File contrib\release\package-windows.ps1 -OutDir dist -RequireInstaller
       - name: Save the vcpkg package cache
         if: always() && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -84,7 +89,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
           if-no-files-found: error
 
   # The oldest glibc the programs run on is the build machine's, so each is built on the oldest

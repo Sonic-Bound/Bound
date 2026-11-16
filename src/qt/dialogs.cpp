@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -24,6 +25,7 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -376,8 +378,13 @@ void show_transaction(Session& session, QWidget* parent, const QString& txid) {
             add(QStringLiteral("Type"), category_text(category));
             const std::optional<Amount> amount = amount_of(tx, "amount");
             add(QStringLiteral("Amount"), amount ? coins_text(*amount, true) : text_of(tx, "amount"));
-            if (tx.contains("fee")) add(QStringLiteral("Fee"), text_of(tx, "fee") + QStringLiteral(" BOUND"));
-            if (tx.contains("address")) add(QStringLiteral("Address"), text_of(tx, "address"), true);
+            if (const std::optional<Amount> fee = amount_of(tx, "fee")) add(QStringLiteral("Fee"), coins_text(*fee));
+            if (tx.contains("address")) {
+                const QString address = text_of(tx, "address");
+                if (const std::optional<QString> name = session.contacts().name_for(address)) add(QStringLiteral("Contact"), *name);
+                add(QStringLiteral("Address"), address, true);
+            }
+            if (const QString memo = text_of(tx, "memo_text"); !memo.isEmpty()) add(QStringLiteral("Memo"), memo);
             add(QStringLiteral("Transaction ID"), text_of(tx, "txid"), true);
             if (tx.contains("blockheight")) {
                 add(QStringLiteral("Block"), QStringLiteral("#%1  %2").arg(text_of(tx, "blockheight"), short_hash(text_of(tx, "blockhash"))));
@@ -396,6 +403,13 @@ void show_transaction(Session& session, QWidget* parent, const QString& txid) {
             auto* buttons = new QDialogButtonBox(&dialog);
             QPushButton* copy = buttons->addButton(QStringLiteral("Copy ID"), QDialogButtonBox::ActionRole);
             QObject::connect(copy, &QPushButton::clicked, &dialog, [txid] { QApplication::clipboard()->setText(txid); });
+            // Milestone 18: the same transaction on the public explorer, as anyone else sees it.
+            const std::string network = session.network_name().toStdString();
+            if (const std::optional<QString> url = explorer_tx_url(network, txid)) {
+                QPushButton* explorer = buttons->addButton(QStringLiteral("Open in explorer"), QDialogButtonBox::ActionRole);
+                explorer->setToolTip(*url);
+                QObject::connect(explorer, &QPushButton::clicked, &dialog, [link = *url] { QDesktopServices::openUrl(QUrl(link)); });
+            }
             if (category == QLatin1String("send") && confirmations == 0) {
                 QPushButton* bump = buttons->addButton(QStringLiteral("Raise the fee"), QDialogButtonBox::ActionRole);
                 bump->setToolTip(QStringLiteral("Replace it with the same payment paying a higher fee (replace-by-fee)"));
@@ -426,6 +440,52 @@ void show_transaction(Session& session, QWidget* parent, const QString& txid) {
             dialog.exec();
         },
         [owner](const RpcFailure& f) { Session::show_error(owner, QStringLiteral("Can't show the transaction"), f); });
+}
+
+std::optional<Contact> edit_contact(const Session& session, QWidget* parent, const Contact& contact) {
+    QDialog dialog(parent);
+    const bool fresh = contact.name.isEmpty();
+    dialog.setWindowTitle(fresh ? QStringLiteral("New contact") : QStringLiteral("Edit a contact"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout;
+    auto* name = new QLineEdit(contact.name, &dialog);
+    name->setMaxLength(60);
+    name->setPlaceholderText(QStringLiteral("Who it is, as you'll look for them"));
+    auto* address = new QLineEdit(contact.address, &dialog);
+    address->setFont(mono_font());
+    address->setMinimumWidth(460);
+    form->addRow(QStringLiteral("Name"), name);
+    form->addRow(QStringLiteral("Address"), address);
+    layout->addLayout(form);
+    auto* problem = new QLabel(&dialog);
+    problem->setStyleSheet(QStringLiteral("color: %1;").arg(colors().negative.name()));
+    layout->addWidget(problem);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    QPushButton* save = buttons->button(QDialogButtonBox::Save);
+    save->setObjectName(QStringLiteral("primary"));
+    layout->addWidget(buttons);
+    const auto check = [&] {
+        const QString typed = address->text().trimmed();
+        const std::optional<QString> taken = session.contacts().name_for(typed);
+        QString why;
+        if (name->text().trimmed().isEmpty()) {
+            why = QStringLiteral("Give it a name.");
+        } else if (!session.valid_address(typed)) {
+            why = QStringLiteral("Not a %1 address.").arg(session.network_name());
+        } else if (taken && typed != contact.address) {
+            why = QStringLiteral("That address is saved already, as %1.").arg(*taken);
+        }
+        problem->setText(why);
+        save->setEnabled(why.isEmpty());
+    };
+    QObject::connect(name, &QLineEdit::textChanged, &dialog, check);
+    QObject::connect(address, &QLineEdit::textChanged, &dialog, check);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    check();
+    name->setFocus();
+    if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+    return Contact{name->text().trimmed(), address->text().trimmed()};
 }
 
 void show_about(QWidget* parent) {

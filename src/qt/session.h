@@ -4,6 +4,7 @@
 // last seen, and unlocking the wallet for a moment to spend.
 
 #include "core/params.h"
+#include "qt/contacts.h"
 #include "qt/rpc.h"
 
 #include <QObject>
@@ -43,6 +44,17 @@ public:
 
     // Refreshes every page now, rather than at the next tick (set by the main window).
     std::function<void()> refresh = [] {};
+    // Milestone 18 (set by the main window): opens Send with this address filled in, or Receive.
+    std::function<void(const QString& address)> pay = [](const QString&) {};
+    std::function<void()> receive = [] {};
+
+    // Milestone 18: names for addresses, the app's own (not the wallet's).
+    Contacts& contacts() { return contacts_; }
+    const Contacts& contacts() const { return contacts_; }
+    // The contact's name and the address, or the address alone.
+    QString who(const QString& address) const;
+    // Whether `address` is an address on this node's network.
+    bool valid_address(const QString& address) const;
 
     static void show_error(QWidget* parent, const QString& title, const RpcFailure& failure);
 
@@ -50,6 +62,7 @@ private:
     Rpc& rpc_;
     NodeHost& host_;
     json wallet_;
+    Contacts contacts_;
 };
 
 }  // namespace bound::gui

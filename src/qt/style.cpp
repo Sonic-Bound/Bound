@@ -4,8 +4,13 @@
 #include <QFontDatabase>
 #include <QGuiApplication>
 #include <QPalette>
+#include <QPointer>
 #include <QStyleFactory>
 #include <QStyleHints>
+
+#include <functional>
+#include <utility>
+#include <vector>
 
 // The images in bound.qrc are compiled into this static library; this makes sure they're
 // registered (Q_INIT_RESOURCE has to be used outside any namespace).
@@ -39,6 +44,8 @@ Colors make_colors(bool dark) {
         c.muted = QColor("#9097b0");
         c.border = QColor("#2b2f4d");
         c.accent = QColor("#748ffc");
+        c.accent_soft = QColor("#252b52");
+        c.hover = QColor("#232741");
         c.positive = QColor("#69db7c");
         c.negative = QColor("#ff8787");
         c.warning_bg = QColor("#3b2f12");
@@ -50,6 +57,8 @@ Colors make_colors(bool dark) {
         c.muted = QColor("#686d84");
         c.border = QColor("#e1e4ee");
         c.accent = QColor("#4263eb");
+        c.accent_soft = QColor("#edf1ff");
+        c.hover = QColor("#f5f6fb");
         c.positive = QColor("#2b8a3e");
         c.negative = QColor("#c92a2a");
         c.warning_bg = QColor("#fff4e6");
@@ -57,6 +66,8 @@ Colors make_colors(bool dark) {
     }
     return c;
 }
+
+std::vector<std::pair<QPointer<QObject>, std::function<void()>>> g_theme_listeners;
 
 QPalette make_palette(const Colors& c) {
     QPalette p;
@@ -87,9 +98,17 @@ QString style_sheet(const Colors& c) {
     return QStringLiteral(R"(
 QWidget#content { background: %1; }
 QListWidget#sidebar { background: %2; border: none; color: %3; outline: 0; padding-top: 6px; }
-QListWidget#sidebar::item { padding: 10px 18px; margin: 2px 10px; border-radius: 8px; }
+QListWidget#sidebar::item { padding: 9px 12px; margin: 2px 10px; border-radius: 8px; }
 QListWidget#sidebar::item:hover { background: rgba(255, 255, 255, 0.07); }
 QListWidget#sidebar::item:selected { background: %4; color: white; }
+QFrame#txRow { border-radius: 8px; }
+QFrame#txRow:hover { background: %11; }
+QFrame#qrBox { background: white; border: 1px solid %6; border-radius: 10px; }
+QPushButton:checked { background: %12; border-color: %4; color: %13; font-weight: 600; }
+QToolButton { padding: 6px 10px; border-radius: 7px; border: 1px solid %6; background: %5; }
+QToolButton:hover { border-color: %4; }
+QToolButton::menu-indicator { image: none; width: 0; }
+QRadioButton { spacing: 8px; padding: 2px 0; }
 QWidget#brand { background: %2; }
 QLabel#brandName { color: white; font-size: 18px; font-weight: 700; }
 QLabel#pill { background: #f08c00; color: white; border-radius: 8px; padding: 1px 8px; font-size: 10px; font-weight: 700; }
@@ -121,7 +140,13 @@ QProgressBar::chunk { background: %4; border-radius: 4px; }
 )")
         .arg(n(c.window), n(c.sidebar), n(c.sidebar_text), n(c.sidebar_selected), n(c.card), n(c.border), n(c.muted),
              n(c.warning_bg), n(c.warning_border))
-        .arg(n(c.sidebar_selected.lighter(115)));
+        .arg(n(c.sidebar_selected.lighter(115)), n(c.hover), n(c.accent_soft), n(c.accent));
+}
+
+void restyle(QApplication& app, bool dark) {
+    g_colors = make_colors(dark);
+    QApplication::setPalette(make_palette(g_colors));
+    app.setStyleSheet(style_sheet(g_colors));
 }
 
 }  // namespace
@@ -129,13 +154,22 @@ QProgressBar::chunk { background: %4; border-radius: 4px; }
 void apply_style(QApplication& app) {
     init_resources();
     QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
-    g_colors = make_colors(system_is_dark());
-    QApplication::setPalette(make_palette(g_colors));
-    app.setStyleSheet(style_sheet(g_colors));
+    restyle(app, system_is_dark());
     app.setWindowIcon(app_icon());
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    // Milestone 18: follow Windows when it switches between light and dark, without a restart.
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, &app, [&app](Qt::ColorScheme scheme) {
+        if (scheme == Qt::ColorScheme::Unknown || (scheme == Qt::ColorScheme::Dark) == g_colors.dark) return;
+        restyle(app, scheme == Qt::ColorScheme::Dark);
+        std::erase_if(g_theme_listeners, [](const auto& l) { return l.first.isNull(); });
+        for (const auto& [owner, listener] : g_theme_listeners) listener();
+    });
+#endif
 }
 
 const Colors& colors() { return g_colors; }
+
+void on_theme_change(QObject* owner, std::function<void()> listener) { g_theme_listeners.emplace_back(owner, std::move(listener)); }
 
 namespace {
 
